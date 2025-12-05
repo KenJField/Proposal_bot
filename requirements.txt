@@ -1,0 +1,47 @@
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+pgvector==0.2.4
+redis==5.0.1
+celery[redis]==5.3.4
+
+# LLM Providers
+google-generativeai==0.3.2
+anthropic==0.7.8
+
+# Email handling
+imap-tools==1.5.0
+smtplib3==0.1.0
+email-validator==2.1.0
+
+# Web scraping and research
+requests==2.31.0
+beautifulsoup4==4.12.2
+google-api-python-client==2.108.0
+
+# Notion integration
+notion-client==2.0.0
+
+# Utilities
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+python-multipart==0.0.6
+jinja2==3.1.2
+structlog==23.2.0
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+isort==5.12.0
+mypy==1.7.1
+
+# Monitoring
+sentry-sdk[fastapi]==1.38.0
+prometheus-client==0.19.0
+python-json-logger==2.0.7
