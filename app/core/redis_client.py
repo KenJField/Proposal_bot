@@ -1,9 +1,9 @@
 """Redis client configuration and utilities."""
 
-import redis
+import redis.asyncio as redis
 from .config import settings
 
-# Create Redis client
+# Create async Redis client
 redis_client = redis.from_url(settings.redis_url)
 
 # Test connection
@@ -63,41 +63,42 @@ def renew_project_lock(project_id: int, agent_name: str, ttl_seconds: int = 300)
 
 
 # Email deduplication
-def check_email_deduplication(email_key: str) -> bool:
+async def check_email_deduplication(email_key: str) -> bool:
     """Check if email was recently sent."""
     if not redis_client:
         return False
 
     key = f"email_sent:{email_key}"
-    return bool(redis_client.exists(key))
+    exists = await redis_client.exists(key)
+    return bool(exists)
 
 
-def mark_email_sent(email_key: str, ttl_seconds: int = 172800) -> None:
+async def mark_email_sent(email_key: str, ttl_seconds: int = 172800) -> None:
     """Mark email as sent for deduplication."""
     if redis_client:
         key = f"email_sent:{email_key}"
-        redis_client.setex(key, ttl_seconds, "1")
+        await redis_client.setex(key, ttl_seconds, "1")
 
 
 # Thread tracking
-def store_email_thread(thread_id: str, thread_data: dict, ttl_seconds: int = 604800) -> None:
+async def store_email_thread(thread_id: str, thread_data: dict, ttl_seconds: int = 604800) -> None:
     """Store email thread information."""
     if redis_client:
         key = f"thread:{thread_id}"
-        redis_client.setex(key, ttl_seconds, str(thread_data))
+        await redis_client.setex(key, ttl_seconds, json.dumps(thread_data))
 
 
-def get_email_thread(thread_id: str) -> Optional[dict]:
+async def get_email_thread(thread_id: str) -> Optional[dict]:
     """Retrieve email thread information."""
     if not redis_client:
         return None
 
     key = f"thread:{thread_id}"
-    data = redis_client.get(key)
+    data = await redis_client.get(key)
 
     if data:
         try:
-            return eval(data.decode())  # In production, use JSON
+            return json.loads(data.decode())
         except:
             return None
 
@@ -105,51 +106,51 @@ def get_email_thread(thread_id: str) -> Optional[dict]:
 
 
 # Work queue management
-def add_to_work_queue(work_item: str, priority: int = 50) -> None:
+async def add_to_work_queue(work_item: str, priority: int = 50) -> None:
     """Add item to priority work queue."""
     if redis_client:
-        redis_client.zadd("work_queue", {work_item: priority})
+        await redis_client.zadd("work_queue", {work_item: priority})
 
 
-def get_work_queue_length() -> int:
+async def get_work_queue_length() -> int:
     """Get work queue length."""
     if not redis_client:
         return 0
 
-    return redis_client.zcard("work_queue")
+    return await redis_client.zcard("work_queue")
 
 
 # Cache management
-def cache_get(key: str) -> Optional[str]:
+async def cache_get(key: str) -> Optional[str]:
     """Get value from cache."""
     if not redis_client:
         return None
 
-    value = redis_client.get(key)
+    value = await redis_client.get(key)
     return value.decode() if value else None
 
 
-def cache_set(key: str, value: str, ttl_seconds: int = 3600) -> None:
+async def cache_set(key: str, value: str, ttl_seconds: int = 3600) -> None:
     """Set value in cache."""
     if redis_client:
-        redis_client.setex(key, ttl_seconds, value)
+        await redis_client.setex(key, ttl_seconds, value)
 
 
-def cache_delete(key: str) -> None:
+async def cache_delete(key: str) -> None:
     """Delete value from cache."""
     if redis_client:
-        redis_client.delete(key)
+        await redis_client.delete(key)
 
 
 # Health check
-def redis_health_check() -> dict:
+async def redis_health_check() -> dict:
     """Check Redis health."""
     if not redis_client:
         return {"status": "unavailable", "error": "Redis client not initialized"}
 
     try:
-        redis_client.ping()
-        info = redis_client.info()
+        await redis_client.ping()
+        info = await redis_client.info()
         return {
             "status": "healthy",
             "version": info.get("redis_version"),

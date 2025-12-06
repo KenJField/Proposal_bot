@@ -14,6 +14,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..core.redis_client import get_redis_client
+
 import redis
 from imap_tools import MailBox, AND
 from pydantic import BaseModel
@@ -58,9 +60,9 @@ class EmailAgent(BaseAgent):
     default_provider = Provider.GEMINI
     default_model = "gemini-1.5-flash"
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.redis = redis_client or redis.from_url(settings.redis_url)
+        self.redis = get_redis_client()
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     async def execute(self, context: AgentContext) -> Dict[str, Any]:
@@ -358,7 +360,9 @@ Return JSON with "subject" and "body" fields.
             }
 
     async def _send_email_via_smtp(self, email_msg: EmailMessage) -> None:
-        """Send email via SMTP."""
+        """Send email via SMTP with retry logic and proper error handling."""
+        import asyncio
+
         msg = MIMEMultipart()
         msg['From'] = f"{email_msg.from_name} <{email_msg.from_email}>"
         msg['To'] = email_msg.to_email
@@ -381,15 +385,65 @@ Return JSON with "subject" and "body" fields.
             part.add_header('Content-Disposition', f'attachment; filename="{attachment["filename"]}"')
             msg.attach(part)
 
-        # Send via SMTP
-        server = smtplib.SMTP(settings.smtp_server, settings.smtp_port)
-        server.starttls()
-        server.login(settings.smtp_username, settings.smtp_password)
-        server.send_message(msg)
-        server.quit()
+        # Send via SMTP with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Use asyncio.to_thread for synchronous SMTP operations
+                await asyncio.to_thread(self._smtp_send_sync, msg)
+                self.logger.info(f"Email sent successfully to {email_msg.to_email}")
+                return
+
+            except Exception as e:
+                self.logger.warning(f"SMTP attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    raise Exception(f"Failed to send email after {max_retries} attempts: {e}")
+
+                # Exponential backoff
+                await asyncio.sleep(2 ** attempt)
+
+    def _smtp_send_sync(self, msg) -> None:
+        """Synchronous SMTP sending (called via asyncio.to_thread)."""
+        try:
+            server = smtplib.SMTP(settings.smtp_server, settings.smtp_port, timeout=30)
+            server.starttls()
+            server.login(settings.smtp_username, settings.smtp_password)
+            server.send_message(msg)
+            server.quit()
+        except smtplib.SMTPException as e:
+            raise Exception(f"SMTP error: {e}")
+        except Exception as e:
+            raise Exception(f"Connection error: {e}")
 
     async def _fetch_new_emails(self) -> List[Dict[str, Any]]:
-        """Fetch new emails from IMAP."""
+        """Fetch new emails from IMAP with proper error handling."""
+        import asyncio
+
+        messages = []
+
+        try:
+            # Use asyncio.to_thread for synchronous IMAP operations
+            raw_messages = await asyncio.to_thread(self._imap_fetch_sync)
+
+            # Process and format messages
+            for msg_data in raw_messages:
+                try:
+                    processed_msg = await self._process_raw_email(msg_data)
+                    if processed_msg:
+                        messages.append(processed_msg)
+                except Exception as e:
+                    self.logger.error(f"Failed to process email {msg_data.get('uid')}: {e}")
+                    continue
+
+        except Exception as e:
+            self.logger.error(f"Failed to fetch emails: {str(e)}")
+            # Don't return empty list - log the error but don't fail silently
+            raise Exception(f"IMAP fetch failed: {e}")
+
+        return messages
+
+    def _imap_fetch_sync(self) -> List[Dict[str, Any]]:
+        """Synchronous IMAP fetching (called via asyncio.to_thread)."""
         messages = []
 
         try:
@@ -398,24 +452,99 @@ Return JSON with "subject" and "body" fields.
                 settings.imap_password
             ) as mailbox:
 
-                # Get unseen messages
-                for msg in mailbox.fetch(AND(seen=False), mark_seen=False):
+                # Get unseen messages from INBOX
+                criteria = AND(seen=False)
+                for msg in mailbox.fetch(criteria, mark_seen=False):
                     messages.append({
                         'uid': msg.uid,
-                        'subject': msg.subject,
-                        'from': msg.from_,
-                        'to': msg.to,
+                        'subject': msg.subject or "",
+                        'from': msg.from_ or "",
+                        'to': msg.to or [],
                         'date': msg.date,
-                        'text': msg.text,
-                        'html': msg.html,
-                        'headers': dict(msg.headers),
-                        'attachments': [{'filename': att.filename, 'content': att.payload} for att in msg.attachments]
+                        'text': msg.text or "",
+                        'html': msg.html or "",
+                        'headers': dict(msg.headers) if msg.headers else {},
+                        'attachments': [{
+                            'filename': att.filename,
+                            'content': att.payload,
+                            'content_type': att.content_type
+                        } for att in msg.attachments] if msg.attachments else []
                     })
 
         except Exception as e:
-            self.logger.error(f"Failed to fetch emails: {str(e)}")
+            raise Exception(f"IMAP connection error: {e}")
 
         return messages
+
+    async def _process_raw_email(self, msg_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Process and validate raw email data."""
+        # Extract thread information from headers
+        headers = msg_data.get('headers', {})
+        message_id = headers.get('Message-ID', '')
+        references = headers.get('References', '')
+
+        # Only process emails that might be relevant (contain thread info or specific keywords)
+        thread_id = self._extract_thread_id_from_headers(headers)
+
+        if not thread_id and not self._is_relevant_email(msg_data):
+            return None
+
+        # Mark as processed to avoid reprocessing
+        await self._mark_email_processed(msg_data['uid'])
+
+        return {
+            'uid': msg_data['uid'],
+            'subject': msg_data['subject'],
+            'sender': msg_data['from'],
+            'recipients': msg_data['to'],
+            'date': msg_data['date'],
+            'text_body': msg_data['text'],
+            'html_body': msg_data['html'],
+            'headers': headers,
+            'attachments': msg_data['attachments'],
+            'thread_id': thread_id,
+            'processed_at': datetime.utcnow().isoformat()
+        }
+
+    def _extract_thread_id_from_headers(self, headers: Dict[str, str]) -> Optional[str]:
+        """Extract thread ID from email headers."""
+        # Check Message-ID and References for our thread IDs
+        message_id = headers.get('Message-ID', '')
+        references = headers.get('References', '')
+
+        # Look for our generated thread IDs in the format <thread_id@server>
+        if '@' in message_id:
+            potential_id = message_id.split('@')[0].strip('<>')
+            if len(potential_id) == 36:  # UUID length
+                return potential_id
+
+        # Check references header
+        if references:
+            for ref in references.split():
+                ref = ref.strip('<>')
+                if '@' in ref and len(ref.split('@')[0]) == 36:
+                    return ref.split('@')[0]
+
+        return None
+
+    def _is_relevant_email(self, msg_data: Dict[str, Any]) -> bool:
+        """Check if email is relevant for processing."""
+        subject = msg_data.get('subject', '').lower()
+        text_body = msg_data.get('text', '').lower()
+
+        # Keywords that indicate relevant emails
+        relevant_keywords = [
+            'validation', 'confirm', 'availability', 'capability',
+            'proposal', 'rfp', 'research', 'methodology',
+            'yes', 'no', 'available', 'unavailable'
+        ]
+
+        return any(keyword in subject or keyword in text_body for keyword in relevant_keywords)
+
+    async def _mark_email_processed(self, uid: str) -> None:
+        """Mark email as processed to avoid duplicate processing."""
+        key = f"processed_email:{uid}"
+        await self.redis.setex(key, 86400, "1")  # Keep for 24 hours
 
     async def _parse_email_content(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse email content using LLM."""

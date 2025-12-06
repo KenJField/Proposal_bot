@@ -287,19 +287,20 @@ Return JSON array of resource gaps.
             task = await self._create_validation_task(validation, context)
             validation_tasks.append(task)
 
-        # Trigger emails via Email Agent
-        email_agent = context.data.get("email_agent")
-        if email_agent:
-            for task in validation_tasks:
-                await email_agent.execute(AgentContext(
-                    project_id=context.project_id,
-                    task_id=task.get("id"),
-                    db_session=context.db_session,
-                    data={
-                        "action": "send_validation_request",
-                        "validation": task
-                    }
-                ))
+        # Trigger emails via Email Agent using registry
+        from ..core.agent import agent_registry
+        email_agent = agent_registry.get_agent("email")
+
+        for task in validation_tasks:
+            await email_agent.execute(AgentContext(
+                project_id=context.project_id,
+                task_id=task.get("id"),
+                db_session=context.db_session,
+                data={
+                    "action": "send_validation_request",
+                    "validation": task
+                }
+            ))
 
         return {
             "pending": validation_tasks,
@@ -468,8 +469,10 @@ Return JSON array of design questions.
 
     async def _send_design_questions(self, questions: List[Dict[str, Any]], context: AgentContext) -> None:
         """Send design questions to project lead via Email Agent."""
-        email_agent = context.data.get("email_agent")
-        if email_agent:
+        from ..core.agent import agent_registry
+        email_agent = agent_registry.get_agent("email")
+
+        await email_agent.execute(AgentContext(
             await email_agent.execute(AgentContext(
                 project_id=context.project_id,
                 db_session=context.db_session,

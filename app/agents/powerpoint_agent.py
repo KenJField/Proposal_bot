@@ -435,8 +435,10 @@ Return JSON with revision plan including specific changes and implementation app
 
     async def _deliver_to_client(self, project_id: int, file_path: str, context: AgentContext) -> None:
         """Deliver presentation to client via Email Agent."""
-        email_agent = context.data.get("email_agent")
-        if email_agent:
+        from ..core.agent import agent_registry
+        email_agent = agent_registry.get_agent("email")
+
+        await email_agent.execute(AgentContext(
             await email_agent.execute(AgentContext(
                 project_id=project_id,
                 db_session=context.db_session,

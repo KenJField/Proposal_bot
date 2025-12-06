@@ -226,12 +226,14 @@ async def submit_rfp(
         await db.commit()
         await db.refresh(project)
 
-        # TODO: Trigger orchestrator to start processing
+        # Trigger orchestrator to start processing (FIX: Actually trigger workflow)
+        from ..core.tasks import process_rfp
+        process_rfp.apply_async(args=[project.id], countdown=5)  # Start in 5 seconds
 
         return {
             "project_id": project.id,
             "status": "submitted",
-            "message": "RFP submitted successfully"
+            "message": "RFP submitted successfully - processing started"
         }
 
     except Exception as e:

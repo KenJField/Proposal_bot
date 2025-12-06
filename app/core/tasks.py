@@ -11,28 +11,24 @@ from ..database.connection import get_db
 @celery_app.task(bind=True, max_retries=3)
 def process_rfp(self, project_id: int) -> Dict[str, Any]:
     """Process a new RFP through the agent workflow."""
+    async def _process_async():
+        # Proper async database session management
+        from ..database.connection import async_session_factory
+
+        async with async_session_factory() as db_session:
+            # Get orchestrator and process
+            orchestrator = agent_registry.get_agent("orchestrator")
+
+            context = AgentContext(
+                project_id=project_id,
+                db_session=db_session
+            )
+
+            return await orchestrator.execute(context)
+
     try:
-        # Get database session
-        db_session = next(get_db())
-
-        # Get orchestrator and process
-        orchestrator = agent_registry.get_agent("orchestrator")
-
-        context = AgentContext(
-            project_id=project_id,
-            db_session=db_session
-        )
-
-        # Run in event loop since agents are async
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            result = loop.run_until_complete(orchestrator.execute(context))
-            return result
-        finally:
-            loop.close()
-
+        # Use asyncio.run for proper async execution
+        return asyncio.run(_process_async())
     except Exception as exc:
         # Retry with exponential backoff
         raise self.retry(countdown=60 * (2 ** self.request.retries), exc=exc)

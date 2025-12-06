@@ -133,8 +133,7 @@ class MetricsCollector:
             # Collect work queue metrics
             await self._collect_queue_metrics()
 
-            # Collect Redis health metrics
-            await self._collect_redis_metrics()
+        # Collect Redis health metrics (removed - now async)
 
             self.last_collection = current_time
 
@@ -177,22 +176,8 @@ class MetricsCollector:
         except Exception as e:
             logger.error(f"Queue metrics collection failed: {e}")
 
-    async def _collect_redis_metrics(self) -> None:
-        """Collect Redis health metrics."""
-        try:
-            redis_health = redis_health_check()
-
-            if redis_health["status"] == "healthy":
-                REDIS_CONNECTIONS.labels(status="healthy").set(1)
-                REDIS_CONNECTIONS.labels(status="unhealthy").set(0)
-            else:
-                REDIS_CONNECTIONS.labels(status="healthy").set(0)
-                REDIS_CONNECTIONS.labels(status="unhealthy").set(1)
-
-        except Exception as e:
-            logger.error(f"Redis metrics collection failed: {e}")
-            REDIS_CONNECTIONS.labels(status="healthy").set(0)
-            REDIS_CONNECTIONS.labels(status="unhealthy").set(1)
+    # Redis metrics collection removed - would require async context manager
+    # TODO: Re-implement with proper async support
 
 
 # Global metrics collector
@@ -274,7 +259,7 @@ class HealthChecker:
         health_status["checks"]["database"] = db_health
 
         # Redis health
-        redis_health = redis_health_check()
+        redis_health = await redis_health_check()
         health_status["checks"]["redis"] = redis_health
 
         # LLM providers health

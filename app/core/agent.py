@@ -125,28 +125,18 @@ class OrchestratorAgent(BaseAgent):
     default_provider = Provider.CLAUDE
     default_model = "claude-3-sonnet-20240229"
 
-    # Workflow state machine
-    STATE_MACHINE = {
-        "received": ["analyzing"],
-        "analyzing": ["requirements_ready", "needs_clarification"],
-        "needs_clarification": ["analyzing", "timeout"],
-        "requirements_ready": ["validating"],
-        "validating": ["planning", "timeout"],
-        "planning": ["draft_ready", "design_questions"],
-        "design_questions": ["planning", "timeout"],
-        "draft_ready": ["review_ready"],
-        "review_ready": ["approved", "revision_requested"],
-        "revision_requested": ["review_ready"],
-        "approved": ["generating"],
-        "generating": ["final_ready", "feedback"],
-        "feedback": ["generating"],
-        "final_ready": ["sent"],
-        "sent": ["won", "lost", "no_response"],
-        "timeout": ["escalated"],
-        "escalated": [],  # Terminal state
-        "won": [],  # Terminal state
-        "lost": [],  # Terminal state
-        "no_response": [],  # Terminal state
+    # Deterministic state transitions (no LLM calls needed)
+    STATE_TRANSITIONS = {
+        "received": {"next": "analyzing", "agent": "brief_review", "action": "analyze_rfp"},
+        "analyzing": {"next": "requirements_ready", "agent": "brief_review", "action": "complete_analysis"},
+        "requirements_ready": {"next": "validating", "agent": "planning", "action": "start_planning"},
+        "validating": {"next": "planning", "agent": "planning", "action": "complete_validations"},
+        "planning": {"next": "draft_ready", "agent": "planning", "action": "create_plan"},
+        "draft_ready": {"next": "review_ready", "agent": "gtm", "action": "generate_proposal"},
+        "review_ready": {"next": "approved", "agent": "gtm", "action": "await_approval"},
+        "approved": {"next": "generating", "agent": "powerpoint", "action": "generate_presentation"},
+        "generating": {"next": "final_ready", "agent": "powerpoint", "action": "finalize_presentation"},
+        "final_ready": {"next": "sent", "agent": "email", "action": "deliver_proposal"},
     }
 
     def __init__(self, agent_registry: 'AgentRegistry', redis_client=None, **kwargs):
