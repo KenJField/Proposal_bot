@@ -1,0 +1,25 @@
+{
+  "id": "brief_2024_002",
+  "client_name": "ABC Company",
+  "client_contact": "John",
+  "client_email": "john@abccompany.com",
+  "title": "Market Research Project",
+  "description": "We need to understand our customers better and see what they think about our products.",
+  "objectives": [
+    "Get customer feedback",
+    "Understand the market"
+  ],
+  "requirements": {},
+  "status": "received",
+  "sales_rep": null,
+  "budget_range": null,
+  "timeline": null,
+  "target_audience": null,
+  "methodology_preferences": [],
+  "deliverables": [],
+  "past_projects": [],
+  "crm_data": {},
+  "web_research": {},
+  "received_at": "2024-06-05T14:30:00Z",
+  "updated_at": "2024-06-05T14:30:00Z"
+}

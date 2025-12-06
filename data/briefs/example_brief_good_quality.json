@@ -1,0 +1,66 @@
+{
+  "id": "brief_2024_001",
+  "client_name": "TechCorp Industries",
+  "client_contact": "Jane Smith",
+  "client_email": "jane.smith@techcorp.com",
+  "title": "Customer Satisfaction and Product Usage Study",
+  "description": "TechCorp Industries is launching a new cloud-based project management platform and needs to understand current customer satisfaction with existing tools, identify unmet needs, and validate key features of our new platform before full market launch. We need both quantitative metrics and qualitative insights to inform our product roadmap and marketing strategy.",
+  "objectives": [
+    "Measure overall satisfaction with current project management tools among target audience",
+    "Identify top pain points and unmet needs in current solutions",
+    "Validate interest in and perceived value of our new platform's key features",
+    "Understand decision-making process and criteria for tool selection",
+    "Size the market opportunity and identify priority segments"
+  ],
+  "requirements": {
+    "target_audience": "Project managers and team leads at companies with 50-500 employees, currently using project management software",
+    "geographic_scope": "United States, United Kingdom, and Germany",
+    "required_sample_size": "n=1,200 quantitative, n=30 qualitative",
+    "language_requirements": ["English", "German"],
+    "timing_constraints": "Field work must be completed before Q4 2024 product launch",
+    "compliance_requirements": ["GDPR compliance for EU respondents", "Data security standards for B2B research"],
+    "deliverable_requirements": [
+      "Executive summary with key findings and recommendations",
+      "Detailed topline report with statistical significance testing",
+      "Cross-tabulation analysis by key segments",
+      "Qualitative findings synthesis",
+      "PowerPoint presentation for C-suite",
+      "Dashboard for ongoing tracking"
+    ]
+  },
+  "status": "received",
+  "sales_rep": "Tom Anderson",
+  "budget_range": [75000, 95000],
+  "timeline": "12 weeks from kickoff to final presentation",
+  "target_audience": "Project managers and team leads at mid-market companies (50-500 employees)",
+  "methodology_preferences": [
+    "online survey",
+    "in-depth interviews",
+    "potentially focus groups for feature validation"
+  ],
+  "deliverables": [
+    "executive summary",
+    "detailed analytical report",
+    "cross-tabs",
+    "PowerPoint presentation",
+    "interactive dashboard"
+  ],
+  "past_projects": ["proj_2023_042", "proj_2022_118"],
+  "crm_data": {
+    "client_since": "2021",
+    "annual_revenue": "$500M",
+    "industry": "Technology - SaaS",
+    "previous_projects_count": 2,
+    "relationship_status": "active",
+    "decision_makers": ["Jane Smith - VP Product", "Robert Chen - CMO"]
+  },
+  "web_research": {
+    "company_size": "450 employees",
+    "funding_stage": "Series C",
+    "recent_news": "Raised $50M Series C in March 2024",
+    "competitors": ["Asana", "Monday.com", "ClickUp"],
+    "product_launch_date": "Q4 2024"
+  },
+  "received_at": "2024-06-01T10:00:00Z",
+  "updated_at": "2024-06-01T10:00:00Z"
+}
