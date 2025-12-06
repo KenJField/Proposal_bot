@@ -21,6 +21,7 @@ dependencies = [
     "langchain-core>=0.3.0",
     "langgraph>=0.2.0",
     "langsmith>=0.1.0",
+    "deepagents>=0.1.0",
 
     # Google Integrations
     "langchain-google-community[gmail]>=2.0.0",

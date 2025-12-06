@@ -2,8 +2,7 @@
 
 from typing import Any, Optional
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
+from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 
 from proposal_bot.config import get_settings
@@ -25,6 +24,11 @@ class BackgroundMemoryAgent:
        - Design preferences from project leads
     4. Identifies trends and patterns in responses
     5. Suggests improvements to proposal generation logic
+
+    Built using LangChain's Deep Agents, which automatically provides:
+    - Planning tools (write_todos)
+    - File system access (ls, read_file, write_file, edit_file)
+    - Subagent spawning (task tool)
     """
 
     def __init__(self, workspace_dir: str = ".agent_workspace/memory"):
@@ -44,14 +48,14 @@ class BackgroundMemoryAgent:
             api_key=self.settings.anthropic_api_key,
         )
 
-        # Initialize tools
-        self.tools = self._initialize_tools()
+        # Initialize custom tools
+        self.custom_tools = self._initialize_custom_tools()
 
-        # Initialize agent
-        self.agent = self._create_agent()
+        # Initialize deep agent
+        self.agent = self._create_deep_agent()
 
-    def _initialize_tools(self) -> list[Any]:
-        """Initialize tools for this agent."""
+    def _initialize_custom_tools(self) -> list[Any]:
+        """Initialize custom tools for this agent."""
         tools = []
 
         # Email tools for monitoring
@@ -62,10 +66,11 @@ class BackgroundMemoryAgent:
 
         return tools
 
-    def _create_agent(self) -> AgentExecutor:
-        """Create the agent for memory management."""
-        prompt = PromptTemplate.from_template(
-            """You are a Background Memory Agent for a proposal generation system.
+    def _create_deep_agent(self) -> Any:
+        """Create the deep agent using create_deep_agent."""
+
+        # Define the system prompt for the agent
+        system_prompt = """You are a Background Memory Agent for a proposal generation system.
 
 Your role is to:
 1. Monitor email communications related to proposals
@@ -77,49 +82,34 @@ Your role is to:
 3. Identify trends and patterns in the data
 4. Maintain an up-to-date knowledge base for future proposals
 
-You have access to the following tools:
-{tools}
+BUILT-IN CAPABILITIES:
+You have built-in access to:
+- Planning tools: Use write_todos to break down monitoring tasks
+- File system: Use ls, read_file, write_file to manage extracted data
+- Subagents: Use the task tool if needed for specialized analysis
 
-Tool names: {tool_names}
+CUSTOM TOOLS:
+You also have access to:
+- Email tools: Search and read emails from Gmail
+- Knowledge base tools: Store and retrieve learnings
 
-Use the following format:
+WORKFLOW:
+1. Extract factual information accurately from emails
+2. Update knowledge incrementally as new information arrives
+3. Identify patterns across multiple projects
+4. Maintain data quality and consistency
+5. Use the file system to track extraction progress
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+Always focus on extracting accurate, actionable knowledge."""
 
-IMPORTANT:
-- Extract factual information accurately
-- Update knowledge incrementally as new information arrives
-- Identify patterns across multiple projects
-- Maintain data quality and consistency
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+        # Create the deep agent
+        agent = create_deep_agent(
+            model=self.llm,
+            tools=self.custom_tools,
+            system_prompt=system_prompt,
         )
 
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=prompt,
-        )
-
-        executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=10,
-            handle_parsing_errors=True,
-        )
-
-        return executor
+        return agent
 
     def process_email_response(self, email_data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -149,7 +139,10 @@ Extract and store:
 Update the appropriate knowledge categories.
         """.strip()
 
-        result = self.agent.invoke({"input": email_summary})
+        # Execute the agent with messages format expected by deep agents
+        result = self.agent.invoke({
+            "messages": [{"role": "user", "content": email_summary}]
+        })
 
         return {
             "status": "processed",
@@ -178,7 +171,10 @@ For each email:
 Provide a summary of all updates made.
         """.strip()
 
-        result = self.agent.invoke({"input": monitoring_task})
+        # Execute the agent
+        result = self.agent.invoke({
+            "messages": [{"role": "user", "content": monitoring_task}]
+        })
 
         return {
             "project_id": project_id,
@@ -205,7 +201,10 @@ Analyze all validation responses in the knowledge base to identify:
 Provide actionable insights for improving future proposals.
         """.strip()
 
-        result = self.agent.invoke({"input": analysis_task})
+        # Execute the agent
+        result = self.agent.invoke({
+            "messages": [{"role": "user", "content": analysis_task}]
+        })
 
         return {
             "status": "analyzed",

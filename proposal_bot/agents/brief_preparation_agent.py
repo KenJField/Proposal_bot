@@ -2,16 +2,13 @@
 
 from typing import Any, Optional
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
+from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 
 from proposal_bot.config import get_settings
 from proposal_bot.schemas.brief import Brief, BriefStatus
 from proposal_bot.tools.email_tools import create_gmail_tools
-from proposal_bot.tools.file_tools import create_file_tools
-from proposal_bot.tools.planning_tools import create_planning_tools
 from proposal_bot.tools.knowledge_tools import create_knowledge_tools
 
 
@@ -29,6 +26,11 @@ class BriefPreparationAgent:
        - CRM system integration
     4. Identifies missing information and requests clarification
     5. Validates brief with sales rep before triggering proposal workflow
+
+    Built using LangChain's Deep Agents, which automatically provides:
+    - Planning tools (write_todos)
+    - File system access (ls, read_file, write_file, edit_file)
+    - Subagent spawning (task tool)
     """
 
     def __init__(self, brief_id: str, workspace_dir: Optional[str] = None):
@@ -50,21 +52,15 @@ class BriefPreparationAgent:
             api_key=self.settings.anthropic_api_key,
         )
 
-        # Initialize tools
-        self.tools = self._initialize_tools()
+        # Initialize custom tools (planning and file tools are built-in to deep agents)
+        self.custom_tools = self._initialize_custom_tools()
 
-        # Initialize agent
-        self.agent = self._create_agent()
+        # Initialize deep agent
+        self.agent = self._create_deep_agent()
 
-    def _initialize_tools(self) -> list[Any]:
-        """Initialize all tools for this agent."""
+    def _initialize_custom_tools(self) -> list[Any]:
+        """Initialize custom tools for this agent (not including built-in deep agent tools)."""
         tools = []
-
-        # Planning tools (write_todos)
-        tools.extend(create_planning_tools(self.workspace_dir))
-
-        # File system tools
-        tools.extend(create_file_tools(self.workspace_dir))
 
         # Email tools (Gmail integration)
         tools.extend(create_gmail_tools())
@@ -72,67 +68,13 @@ class BriefPreparationAgent:
         # Knowledge base tools
         tools.extend(create_knowledge_tools(self.workspace_dir))
 
-        # Add task tool for spawning sub-agents
-        tools.append(self._create_task_tool())
-
         return tools
 
-    def _create_task_tool(self) -> Any:
-        """Create the task tool for spawning sub-agents."""
-        from langchain.tools import tool
+    def _create_deep_agent(self) -> Any:
+        """Create the deep agent using create_deep_agent."""
 
-        @tool
-        def spawn_subagent(task_description: str, agent_type: str) -> str:
-            """
-            Spawn a specialized sub-agent for a specific task.
-
-            Args:
-                task_description: Detailed description of the task for the sub-agent
-                agent_type: Type of sub-agent (email_communicator/project_researcher/web_researcher/crm_integrator)
-
-            Returns:
-                Result from the sub-agent
-            """
-            # Create a specialized sub-agent based on type
-            if agent_type == "email_communicator":
-                return self._email_communicator_subagent(task_description)
-            elif agent_type == "project_researcher":
-                return self._project_researcher_subagent(task_description)
-            elif agent_type == "web_researcher":
-                return self._web_researcher_subagent(task_description)
-            elif agent_type == "crm_integrator":
-                return self._crm_integrator_subagent(task_description)
-            else:
-                return f"Unknown agent type: {agent_type}"
-
-        return spawn_subagent
-
-    def _email_communicator_subagent(self, task: str) -> str:
-        """Sub-agent for email communication with sales reps."""
-        # This sub-agent handles back-and-forth email communication
-        # with sales reps to clarify brief details
-        return f"Email Communicator Sub-agent executed: {task}"
-
-    def _project_researcher_subagent(self, task: str) -> str:
-        """Sub-agent for searching past projects."""
-        # This sub-agent searches project repositories for similar past work
-        return f"Project Researcher Sub-agent executed: {task}"
-
-    def _web_researcher_subagent(self, task: str) -> str:
-        """Sub-agent for web research about the client."""
-        # This sub-agent performs web research to build client profiles
-        return f"Web Researcher Sub-agent executed: {task}"
-
-    def _crm_integrator_subagent(self, task: str) -> str:
-        """Sub-agent for CRM integration."""
-        # This sub-agent retrieves client data from CRM systems
-        return f"CRM Integrator Sub-agent executed: {task}"
-
-    def _create_agent(self) -> AgentExecutor:
-        """Create the ReAct agent with tools."""
-        # Define the agent prompt
-        prompt = PromptTemplate.from_template(
-            """You are a Brief Preparation Agent for a market research firm.
+        # Define the system prompt for the agent
+        system_prompt = """You are a Brief Preparation Agent for a market research firm.
 
 Your role is to:
 1. Analyze incoming research briefs for completeness and quality
@@ -141,52 +83,38 @@ Your role is to:
 4. Communicate with sales representatives to clarify requirements
 5. Validate the final brief before triggering the proposal workflow
 
-You have access to the following tools:
-{tools}
+BUILT-IN CAPABILITIES:
+You have built-in access to:
+- Planning tools: Use write_todos to break down tasks and track progress
+- File system: Use ls, read_file, write_file, edit_file to manage context
+- Subagents: Use the task tool to spawn specialized subagents for complex tasks
 
-Tool names: {tool_names}
+CUSTOM TOOLS:
+You also have access to:
+- Email tools: Send and receive emails via Gmail
+- Knowledge base tools: Store and retrieve learnings for future briefs
 
-Use the following format:
+WORKFLOW:
+1. Start by using write_todos to plan your approach
+2. Use read_file/write_file to store brief details and analysis
+3. Spawn subagents using the task tool for specialized work:
+   - Email communicator: Clarify requirements with sales reps
+   - Project researcher: Find similar past projects
+   - Web researcher: Research client background
+   - CRM integrator: Retrieve client data
+4. Store learnings in the knowledge base
+5. Be thorough in identifying missing information
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+Always break down complex tasks and track your progress systematically."""
 
-IMPORTANT:
-- Always start by using write_todos to plan your approach
-- Break down complex tasks and track your progress
-- Use spawn_subagent for specialized tasks (email, research, CRM)
-- Store learnings in the knowledge base for future briefs
-- Be thorough in identifying missing information
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+        # Create the deep agent
+        agent = create_deep_agent(
+            model=self.llm,
+            tools=self.custom_tools,
+            system_prompt=system_prompt,
         )
 
-        # Create the ReAct agent
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=prompt,
-        )
-
-        # Create executor with verbose output
-        executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=15,
-            handle_parsing_errors=True,
-        )
-
-        return executor
+        return agent
 
     def process_brief(self, brief: Brief, sales_rep_email: str) -> dict[str, Any]:
         """
@@ -226,8 +154,10 @@ Your task is to:
 Be thorough and methodical. Use your planning tools to track progress.
         """.strip()
 
-        # Execute the agent
-        result = self.agent.invoke({"input": brief_summary})
+        # Execute the agent with messages format expected by deep agents
+        result = self.agent.invoke({
+            "messages": [{"role": "user", "content": brief_summary}]
+        })
 
         return {
             "brief_id": self.brief_id,

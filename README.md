@@ -24,10 +24,14 @@ Proposal Bot automates the complex process of creating market research proposals
 - Handles clarifications, validations, and approvals seamlessly
 - Resumes from checkpoints when responses are received
 
-### 🛠️ Deep Agent Tools
+### 🛠️ Deep Agent Capabilities
 
-- **Planning Tools**: `write_todos` for task breakdown and progress tracking
-- **File Tools**: Read, write, edit files for context management
+**Built-in (from `create_deep_agent`):**
+- **Planning Tools**: `write_todos` for task breakdown and progress tracking (automatic)
+- **File Tools**: `ls`, `read_file`, `write_file`, `edit_file` for context management (automatic)
+- **Subagent Spawning**: `task` tool for delegating to specialized sub-agents (automatic)
+
+**Custom Tools:**
 - **Email Tools**: Gmail integration for automated communication
 - **Resource Tools**: Google Sheets integration for staff and vendor data
 - **Knowledge Tools**: Memory management for continuous learning
@@ -293,50 +297,63 @@ docker run -d \
 
 ## Deep Agents Pattern
 
-This implementation follows LangChain's Deep Agents pattern:
+This implementation uses LangChain's official **`create_deep_agent`** API from the `deepagents` package.
 
-### 1. Planning Tool (write_todos)
-
-Agents break down complex tasks into manageable steps:
+### Creating a Deep Agent
 
 ```python
+from deepagents import create_deep_agent
+from langchain_anthropic import ChatAnthropic
+
+# Initialize LLM
+llm = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+
+# Create deep agent with built-in capabilities
+agent = create_deep_agent(
+    model=llm,
+    tools=[...],  # Custom tools only (planning & file tools are automatic)
+    system_prompt="You are a research proposal agent..."
+)
+
+# Invoke the agent
+result = agent.invoke({
+    "messages": [{"role": "user", "content": "Create a proposal..."}]
+})
+```
+
+### Built-in Capabilities
+
+Deep agents automatically provide:
+
+**1. Planning Tool (`write_todos`)**
+Agents break down complex tasks:
+```python
+# This tool is built-in - no need to create it manually
 write_todos([
-    {
-        "content": "Analyze brief quality",
-        "status": "in_progress",
-        "activeForm": "Analyzing brief quality"
-    },
-    {
-        "content": "Search for qualified staff",
-        "status": "pending",
-        "activeForm": "Searching for qualified staff"
-    }
+    {"content": "Analyze brief", "status": "in_progress", "activeForm": "Analyzing brief"},
+    {"content": "Search staff", "status": "pending", "activeForm": "Searching staff"}
 ])
 ```
 
-### 2. File System
-
-Agents use file tools to manage context:
-
+**2. File System Tools**
+Agents manage context automatically:
 ```python
-write_file("project_plan.md", plan_content)
-read_file("validation_responses.json")
+# These tools are built-in
+ls(".")
+read_file("project_plan.md")
+write_file("analysis.txt", content)
+edit_file("draft.md", old_text, new_text)
 ```
 
-### 3. Sub-Agents
-
-Agents spawn specialized sub-agents:
-
+**3. Subagent Spawning (`task`)**
+Agents delegate to specialists:
 ```python
-spawn_subagent(
-    task_description="Validate vendor pricing and availability",
-    agent_type="resource_validator"
-)
+# Built-in task tool for spawning subagents
+task(task_description="Validate vendor pricing", ...)
 ```
 
-### 4. Detailed Prompts
-
-Each agent has specialized system prompts for its domain.
+**4. Detailed System Prompts**
+Each agent has specialized prompts configured via the `system_prompt` parameter.
 
 ## Knowledge Management
 

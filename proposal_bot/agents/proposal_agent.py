@@ -2,8 +2,7 @@
 
 from typing import Any, Optional
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
+from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 
@@ -12,9 +11,7 @@ from proposal_bot.schemas.brief import Brief
 from proposal_bot.schemas.project import Project, ProjectPlan, ProjectStatus, ResourceAssignment
 from proposal_bot.schemas.proposal import Proposal
 from proposal_bot.tools.email_tools import create_gmail_tools
-from proposal_bot.tools.file_tools import create_file_tools
 from proposal_bot.tools.knowledge_tools import create_knowledge_tools
-from proposal_bot.tools.planning_tools import create_planning_tools
 from proposal_bot.tools.resource_tools import create_resource_tools
 
 
@@ -36,6 +33,11 @@ class ProposalAgent:
     6. Spawns sub-agent to validate design decisions with project lead
     7. Applies business logic and pricing rules
     8. Generates formatted proposal document
+
+    Built using LangChain's Deep Agents, which automatically provides:
+    - Planning tools (write_todos)
+    - File system access (ls, read_file, write_file, edit_file)
+    - Subagent spawning (task tool)
     """
 
     def __init__(self, project_id: str, workspace_dir: Optional[str] = None):
@@ -57,21 +59,15 @@ class ProposalAgent:
             api_key=self.settings.anthropic_api_key,
         )
 
-        # Initialize tools
-        self.tools = self._initialize_tools()
+        # Initialize custom tools (planning and file tools are built-in to deep agents)
+        self.custom_tools = self._initialize_custom_tools()
 
-        # Initialize agent
-        self.agent = self._create_agent()
+        # Initialize deep agent
+        self.agent = self._create_deep_agent()
 
-    def _initialize_tools(self) -> list[Any]:
-        """Initialize all tools for this agent."""
+    def _initialize_custom_tools(self) -> list[Any]:
+        """Initialize custom tools for this agent (not including built-in deep agent tools)."""
         tools = []
-
-        # Planning tools
-        tools.extend(create_planning_tools(self.workspace_dir))
-
-        # File system tools
-        tools.extend(create_file_tools(self.workspace_dir))
 
         # Resource tools (Google Sheets)
         tools.extend(create_resource_tools())
@@ -82,73 +78,13 @@ class ProposalAgent:
         # Knowledge tools
         tools.extend(create_knowledge_tools(self.workspace_dir))
 
-        # Add sub-agent spawning tool
-        tools.append(self._create_task_tool())
-
         return tools
 
-    def _create_task_tool(self) -> Any:
-        """Create the task tool for spawning sub-agents."""
-        from langchain.tools import tool
+    def _create_deep_agent(self) -> Any:
+        """Create the deep agent using create_deep_agent."""
 
-        @tool
-        def spawn_subagent(task_description: str, agent_type: str, context: str = "") -> str:
-            """
-            Spawn a specialized sub-agent for a specific task.
-
-            Args:
-                task_description: Detailed description of the task
-                agent_type: Type of sub-agent (resource_validator/lead_validator/pricing_calculator)
-                context: Additional context for the sub-agent
-
-            Returns:
-                Result from the sub-agent
-            """
-            if agent_type == "resource_validator":
-                return self._resource_validator_subagent(task_description, context)
-            elif agent_type == "lead_validator":
-                return self._lead_validator_subagent(task_description, context)
-            elif agent_type == "pricing_calculator":
-                return self._pricing_calculator_subagent(task_description, context)
-            else:
-                return f"Unknown agent type: {agent_type}"
-
-        return spawn_subagent
-
-    def _resource_validator_subagent(self, task: str, context: str) -> str:
-        """
-        Sub-agent for validating resource availability and pricing.
-
-        This sub-agent sends validation emails to resource managers and processes responses.
-        """
-        # In a full implementation, this would:
-        # 1. Parse resource requirements from context
-        # 2. Send validation emails using email tools
-        # 3. Monitor for responses
-        # 4. Parse and validate responses
-        # 5. Update resource assignments
-        return f"Resource Validator Sub-agent: {task} (simulated)"
-
-    def _lead_validator_subagent(self, task: str, context: str) -> str:
-        """
-        Sub-agent for validating project design with proposed lead.
-
-        This sub-agent communicates with the project lead to validate design decisions.
-        """
-        return f"Lead Validator Sub-agent: {task} (simulated)"
-
-    def _pricing_calculator_subagent(self, task: str, context: str) -> str:
-        """
-        Sub-agent for calculating final pricing with business logic.
-
-        This sub-agent applies pricing rules, markups, and discounts.
-        """
-        return f"Pricing Calculator Sub-agent: {task} (simulated)"
-
-    def _create_agent(self) -> AgentExecutor:
-        """Create the ReAct agent with tools."""
-        prompt = PromptTemplate.from_template(
-            """You are a Proposal Generation Agent for a market research firm.
+        # Define the system prompt for the agent
+        system_prompt = """You are a Proposal Generation Agent for a market research firm.
 
 Your role is to:
 1. Analyze validated brief and create comprehensive project plan
@@ -159,54 +95,37 @@ Your role is to:
 6. Apply business logic and pricing rules to finalize the proposal
 7. Generate a formatted, professional proposal document
 
-You have access to the following tools:
-{tools}
+BUILT-IN CAPABILITIES:
+You have built-in access to:
+- Planning tools: Use write_todos to break down tasks and track progress
+- File system: Use ls, read_file, write_file, edit_file to manage context
+- Subagents: Use the task tool to spawn specialized subagents for complex tasks
 
-Tool names: {tool_names}
+CUSTOM TOOLS:
+You also have access to:
+- Resource tools: Search for staff and vendors in Google Sheets
+- Email tools: Send and receive emails via Gmail for validations
+- Knowledge base tools: Store and retrieve successful proposal patterns
 
-Use the following format:
+WORKFLOW:
+1. Start by using write_todos to create a comprehensive project plan
+2. Use resource search tools to find qualified staff and vendors
+3. Spawn resource_validator sub-agents for each resource that needs validation
+4. Select a project lead based on expertise, availability, and past performance
+5. Spawn lead_validator sub-agent to confirm design approach
+6. Use file tools to draft and refine the proposal document
+7. Store successful patterns in knowledge base for future proposals
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+Be thorough, professional, and ensure all validations are complete before finalizing."""
 
-IMPORTANT:
-- Start by using write_todos to create a comprehensive project plan
-- Use resource search tools to find qualified staff and vendors
-- Spawn resource_validator sub-agents for each resource that needs validation
-- Select a project lead based on expertise, availability, and past performance
-- Spawn lead_validator sub-agent to confirm design approach
-- Use file tools to draft and refine the proposal document
-- Store successful patterns in knowledge base for future proposals
-
-Be thorough, professional, and ensure all validations are complete before finalizing.
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+        # Create the deep agent
+        agent = create_deep_agent(
+            model=self.llm,
+            tools=self.custom_tools,
+            system_prompt=system_prompt,
         )
 
-        agent = create_react_agent(
-            llm=self.llm,
-            tools=self.tools,
-            prompt=prompt,
-        )
-
-        executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=20,
-            handle_parsing_errors=True,
-        )
-
-        return executor
+        return agent
 
     def generate_proposal(self, brief: Brief) -> dict[str, Any]:
         """
@@ -249,7 +168,10 @@ Your tasks:
 Use your planning tools to organize this work systematically.
         """.strip()
 
-        result = self.agent.invoke({"input": brief_summary})
+        # Execute the agent with messages format expected by deep agents
+        result = self.agent.invoke({
+            "messages": [{"role": "user", "content": brief_summary}]
+        })
 
         return {
             "project_id": self.project_id,
