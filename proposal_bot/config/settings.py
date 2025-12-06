@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     gmail_user_email: str = Field(
         ..., description="Gmail address for sending/receiving emails"
     )
+    gmail_client_id: str = Field(..., description="Gmail OAuth client ID")
+    gmail_client_secret: str = Field(..., description="Gmail OAuth client secret")
+    gmail_access_token: str = Field(..., description="Gmail OAuth access token")
+    gmail_refresh_token: str = Field(..., description="Gmail OAuth refresh token")
 
     # Database Configuration
     database_url: str = Field(
@@ -72,6 +76,28 @@ class Settings(BaseSettings):
     project_lead_response_timeout_hours: int = Field(
         default=48, description="Hours to wait for project lead responses"
     )
+
+    # Authentication Configuration
+    jwt_secret_key: Optional[str] = Field(
+        default=None, description="JWT secret key for token signing"
+    )
+    admin_username: str = Field(
+        default="admin", description="Admin username for agent server access"
+    )
+    admin_password_hash: str = Field(
+        ..., description="Hashed admin password for agent server access"
+    )
+
+    # Audit Logging Configuration
+    audit_logging_enabled: bool = Field(
+        default=True, description="Enable comprehensive audit logging"
+    )
+
+    # Deployment Configuration
+    deployment_environment: str = Field(
+        default="development", description="Deployment environment for LangSmith"
+    )
+    version: str = Field(default="1.0.0", description="Application version")
 
     # Monitoring (Optional)
     sentry_dsn: Optional[str] = Field(default=None, description="Sentry DSN for error tracking")

@@ -1,0 +1,70 @@
+{
+  "name": "proposal-bot",
+  "version": "1.0.0",
+  "description": "LangChain Deep Agent system for automated market research proposal generation",
+  "environment": "production",
+  "python_version": "3.11",
+  "dependencies": [
+    "langchain>=0.3.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langgraph>=0.2.0",
+    "langsmith>=0.1.0",
+    "deepagents>=0.1.0",
+    "langserve[server]>=0.3.0",
+    "langchain-cli>=0.0.25",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "structlog>=24.1.0",
+    "sentry-sdk[fastapi]>=2.0.0",
+    "opentelemetry-distro>=0.45b0",
+    "opentelemetry-exporter-otlp>=1.24.0"
+  ],
+  "endpoints": {
+    "brief-preparation": {
+      "path": "/brief-preparation",
+      "description": "Brief preparation and validation agent"
+    },
+    "proposal-generation": {
+      "path": "/proposal-generation",
+      "description": "Proposal generation and resource validation agent"
+    },
+    "background-memory": {
+      "path": "/background-memory",
+      "description": "Background memory and knowledge extraction agent"
+    },
+    "workflows": {
+      "path": "/workflows",
+      "description": "Complete proposal workflow orchestration"
+    }
+  },
+  "middleware": {
+    "filesystem": true,
+    "todo_list": true,
+    "subagents": true,
+    "long_term_memory": true,
+    "human_in_the_loop": true,
+    "audit_logging": true
+  },
+  "security": {
+    "authentication": "jwt",
+    "authorization": "role_based",
+    "audit_trail": true,
+    "interrupt_on_sensitive_operations": true
+  },
+  "memory": {
+    "backend": "composite",
+    "persistent_paths": ["/memories/*", "/knowledge/*"],
+    "ephemeral_paths": ["/*"]
+  },
+  "monitoring": {
+    "tracing": true,
+    "metrics": true,
+    "health_checks": true,
+    "error_tracking": true
+  }
+}

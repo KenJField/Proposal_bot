@@ -4,8 +4,10 @@ from typing import Any, Optional
 
 from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
+from langgraph.checkpoint.memory import MemorySaver
 
 from proposal_bot.config import get_settings
+from proposal_bot.memory import create_composite_memory_backend
 from proposal_bot.tools.email_tools import create_gmail_tools
 from proposal_bot.tools.knowledge_tools import create_knowledge_tools
 
@@ -51,6 +53,14 @@ class BackgroundMemoryAgent:
         # Initialize custom tools
         self.custom_tools = self._initialize_custom_tools()
 
+        # Initialize memory backend for long-term persistence
+        self.memory_backend = create_composite_memory_backend(
+            memory_dir=f"{self.workspace_dir}/memory"
+        )
+
+        # Initialize checkpointer for human-in-the-loop workflows
+        self.checkpointer = MemorySaver()
+
         # Initialize deep agent
         self.agent = self._create_deep_agent()
 
@@ -59,7 +69,7 @@ class BackgroundMemoryAgent:
         tools = []
 
         # Email tools for monitoring
-        tools.extend(create_gmail_tools())
+        tools.extend(create_gmail_tools(agent_id="background_memory"))
 
         # Knowledge tools for memory updates
         tools.extend(create_knowledge_tools(self.workspace_dir))
@@ -102,11 +112,14 @@ WORKFLOW:
 
 Always focus on extracting accurate, actionable knowledge."""
 
-        # Create the deep agent
+        # Create the deep agent with LangSmith best practices
         agent = create_deep_agent(
             model=self.llm,
             tools=self.custom_tools,
             system_prompt=system_prompt,
+            backend=self.memory_backend,  # Long-term memory backend
+            checkpointer=self.checkpointer,  # Human-in-the-loop support
+            interrupt_on=["GmailSendMessage", "GmailSearch"],  # Require approval for email operations
         )
 
         return agent

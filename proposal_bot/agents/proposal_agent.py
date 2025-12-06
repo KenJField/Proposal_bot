@@ -5,8 +5,10 @@ from typing import Any, Optional
 from deepagents import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 
 from proposal_bot.config import get_settings
+from proposal_bot.memory import create_composite_memory_backend
 from proposal_bot.schemas.brief import Brief
 from proposal_bot.schemas.project import Project, ProjectPlan, ProjectStatus, ResourceAssignment
 from proposal_bot.schemas.proposal import Proposal
@@ -62,6 +64,14 @@ class ProposalAgent:
         # Initialize custom tools (planning and file tools are built-in to deep agents)
         self.custom_tools = self._initialize_custom_tools()
 
+        # Initialize memory backend for long-term persistence
+        self.memory_backend = create_composite_memory_backend(
+            memory_dir=f"{self.workspace_dir}/memory"
+        )
+
+        # Initialize checkpointer for human-in-the-loop workflows
+        self.checkpointer = MemorySaver()
+
         # Initialize deep agent
         self.agent = self._create_deep_agent()
 
@@ -73,7 +83,7 @@ class ProposalAgent:
         tools.extend(create_resource_tools())
 
         # Email tools
-        tools.extend(create_gmail_tools())
+        tools.extend(create_gmail_tools(agent_id=f"proposal_{self.project_id}"))
 
         # Knowledge tools
         tools.extend(create_knowledge_tools(self.workspace_dir))
@@ -118,11 +128,14 @@ WORKFLOW:
 
 Be thorough, professional, and ensure all validations are complete before finalizing."""
 
-        # Create the deep agent
+        # Create the deep agent with LangSmith best practices
         agent = create_deep_agent(
             model=self.llm,
             tools=self.custom_tools,
             system_prompt=system_prompt,
+            backend=self.memory_backend,  # Long-term memory backend
+            checkpointer=self.checkpointer,  # Human-in-the-loop support
+            interrupt_on=["GmailSendMessage", "GmailCreateDraft"],  # Require approval for email operations
         )
 
         return agent
