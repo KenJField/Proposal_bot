@@ -78,10 +78,31 @@ class GeminiProvider(BaseLLMProvider):
         )
 
     async def generate_with_tools(self, prompt: str, tools: List[Dict], config: LLMConfig) -> LLMResponse:
-        """Generate with tools - simplified for now."""
-        # For now, just call regular generate
-        # TODO: Implement proper tool calling for Gemini
-        return await self.generate(prompt, config)
+        """Generate with tools using Gemini."""
+        model = self.client.GenerativeModel(
+            config.model,
+            tools=tools,
+            tool_config={"function_calling_config": "AUTO"}
+        )
+
+        generation_config = genai.types.GenerationConfig(
+            temperature=config.temperature,
+            max_output_tokens=config.max_tokens,
+        )
+
+        chat = model.start_chat()
+        response = await chat.send_message_async(prompt, generation_config=generation_config)
+
+        # Handle function calls if present
+        if response.candidates and response.candidates[0].function_calls:
+            # For now, return the response - tool execution would be handled by the agent
+            pass
+
+        return LLMResponse(
+            content=response.text,
+            usage={"function_calls": len(response.candidates[0].function_calls) if response.candidates and response.candidates[0].function_calls else 0},
+            finish_reason=response.candidates[0].finish_reason.name if response.candidates else "UNKNOWN",
+        )
 
 
 class ClaudeProvider(BaseLLMProvider):

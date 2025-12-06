@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Proposal Clarification Request</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+        .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+        .content { margin: 20px 0; }
+        .questions { background-color: #f0f8ff; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .question { margin: 10px 0; padding: 10px; background: white; border-radius: 3px; border-left: 4px solid #007bff; }
+        .urgent { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Clarification Request - Market Research Proposal</h2>
+        <p>Dear {{ client_name or 'Valued Client' }},</p>
+    </div>
+
+    <div class="content">
+        <p>Thank you for providing your RFP for our market research proposal. We're excited about the opportunity to work with you!</p>
+
+        <p>To ensure we can provide the most accurate and comprehensive proposal, we need some clarification on a few points from your requirements. This will help us tailor our approach to best meet your needs.</p>
+
+        <div class="questions">
+            <h3>Questions for Clarification:</h3>
+            {% for question in questions %}
+            <div class="question">
+                <strong>{{ loop.index }}. {{ question.text }}</strong>
+                {% if question.context %}
+                <br><em>Context: {{ question.context }}</em>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if urgency == 'high' %}
+        <div class="urgent">
+            <strong>⚠️ Time-Sensitive:</strong> To meet your proposal timeline, we would appreciate responses to these questions within {{ deadline_hours or 72 }} hours. This will ensure we can deliver our best work for your project.
+        </div>
+        {% endif %}
+
+        <p>Your responses will help us:</p>
+        <ul>
+            <li>Provide more accurate cost estimates</li>
+            <li>Ensure our methodology aligns with your needs</li>
+            <li>Optimize our team composition for your project</li>
+            <li>Deliver a proposal that truly addresses your requirements</li>
+        </ul>
+
+        <p>Please reply to this email with your answers, and we'll incorporate them into our proposal immediately.</p>
+
+        <p>We look forward to your response and the opportunity to work together!</p>
+    </div>
+
+    <div class="footer">
+        <p><strong>Proposal Team</strong><br>
+        {{ company_name or 'Market Research Firm' }}<br>
+        Email: {{ reply_email or 'proposals@company.com' }}<br>
+        Phone: {{ phone or '(555) 123-4567' }}</p>
+
+        <p><em>This clarification will help us provide the most competitive and accurate proposal possible.</em></p>
+    </div>
+</body>
+</html>

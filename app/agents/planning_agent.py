@@ -113,7 +113,57 @@ class PlanningAgent(BaseAgent):
 
     async def _query_resource_candidates(self, methodologies: List[str]) -> List[Dict[str, Any]]:
         """Query knowledge base for resources with required capabilities."""
-        # In a real implementation, this would use vector search
+        try:
+            # Import here to avoid circular imports
+            from ..knowledge.kb import KnowledgeBase
+            from ..database.connection import async_session_factory
+
+            async with async_session_factory() as db_session:
+                kb = KnowledgeBase(db_session)
+
+                # Search for each methodology and aggregate results
+                all_candidates = {}
+                for methodology in methodologies:
+                    try:
+                        candidates = await kb.search_resources(
+                            query=f"experienced in {methodology}",
+                            top_k=3
+                        )
+
+                        # Aggregate by resource ID to avoid duplicates
+                        for candidate in candidates:
+                            resource_id = candidate["id"]
+                            if resource_id not in all_candidates:
+                                all_candidates[resource_id] = candidate
+                            else:
+                                # Merge capabilities and update scores
+                                existing = all_candidates[resource_id]
+                                existing["capabilities"].extend(candidate.get("capabilities", []))
+                                existing["capabilities"] = list(set(existing["capabilities"]))  # Remove duplicates
+                                existing["similarity_score"] = max(
+                                    existing.get("similarity_score", 0),
+                                    candidate.get("similarity_score", 0)
+                                )
+
+                    except Exception as e:
+                        self.logger.warning(f"KB search failed for {methodology}: {e}")
+                        continue
+
+                # Convert back to list and add fallback if no results
+                candidates_list = list(all_candidates.values())
+                if not candidates_list:
+                    # Fallback to basic search
+                    candidates_list = await self._fallback_resource_search(methodologies)
+
+                return candidates_list
+
+        except Exception as e:
+            self.logger.error(f"KB query failed, using fallback: {e}")
+            return await self._fallback_resource_search(methodologies)
+
+    async def _fallback_resource_search(self, methodologies: List[str]) -> List[Dict[str, Any]]:
+        """Fallback resource search when KB is unavailable."""
+        # This would be removed once KB is fully populated
         # For now, return mock data representing the search results
         return [
             {
@@ -122,7 +172,8 @@ class PlanningAgent(BaseAgent):
                 "type": "person",
                 "capabilities": ["qualitative_research", "focus_groups", "interviews"],
                 "availability": "available",
-                "confidence_score": 0.9
+                "confidence_score": 0.9,
+                "similarity_score": 0.8
             },
             {
                 "id": 2,
@@ -130,7 +181,8 @@ class PlanningAgent(BaseAgent):
                 "type": "person",
                 "capabilities": ["quantitative_research", "survey_design", "conjoint_analysis"],
                 "availability": "limited",
-                "confidence_score": 0.8
+                "confidence_score": 0.8,
+                "similarity_score": 0.7
             },
             {
                 "id": 3,
@@ -138,7 +190,8 @@ class PlanningAgent(BaseAgent):
                 "type": "vendor",
                 "capabilities": ["survey_hosting", "sample_recruitment"],
                 "availability": "available",
-                "confidence_score": 0.7
+                "confidence_score": 0.7,
+                "similarity_score": 0.6
             }
         ]
 
@@ -287,25 +340,28 @@ Return JSON array of resource gaps.
             task = await self._create_validation_task(validation, context)
             validation_tasks.append(task)
 
-        # Trigger emails via Email Agent using registry
-        from ..core.agent import agent_registry
-        email_agent = agent_registry.get_agent("email")
-
+        # Trigger emails via Celery tasks for proper async execution
         for task in validation_tasks:
-            await email_agent.execute(AgentContext(
-                project_id=context.project_id,
-                task_id=task.get("id"),
-                db_session=context.db_session,
-                data={
-                    "action": "send_validation_request",
-                    "validation": task
-                }
-            ))
+            from ..core.tasks import send_validation_email
+            send_validation_email.apply_async(
+                args=[{
+                    "validation_id": task["id"],
+                    "recipient_email": task.get("recipient_email"),
+                    "recipient_name": task.get("recipient_name"),
+                    "question": task.get("question"),
+                    "attribute_path": task.get("attribute_path"),
+                    "project_title": task.get("project_title", "Market Research Project"),
+                    "priority": task.get("priority", "medium")
+                }],
+                countdown=5,  # Start in 5 seconds to avoid immediate load
+                expires=settings.validation_timeout
+            )
 
         return {
             "pending": validation_tasks,
             "completed": [],
-            "status": "validations_triggered"
+            "status": "validations_triggered",
+            "celery_tasks_queued": len(validation_tasks)
         }
 
     async def _create_validation_task(self, validation: Dict[str, Any], context: AgentContext) -> Dict[str, Any]:

@@ -37,29 +37,67 @@ def process_rfp(self, project_id: int) -> Dict[str, Any]:
 @celery_app.task(bind=True, max_retries=5)
 def send_email(self, email_data: Dict[str, Any], project_id: Optional[int] = None) -> Dict[str, Any]:
     """Send an email asynchronously."""
+    async def _send_async():
+        # Proper async database session management
+        from ..database.connection import async_session_factory
+
+        async with async_session_factory() as db_session:
+            email_agent = agent_registry.get_agent("email")
+
+            context = AgentContext(
+                project_id=project_id or 0,
+                db_session=db_session,
+                data={"action": "send_email", "email": email_data}
+            )
+
+            return await email_agent.execute(context)
+
     try:
-        db_session = next(get_db())
-
-        email_agent = agent_registry.get_agent("email")
-
-        context = AgentContext(
-            project_id=project_id or 0,
-            db_session=db_session,
-            data={"action": "send_email", "email": email_data}
-        )
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            result = loop.run_until_complete(email_agent.execute(context))
-            return result
-        finally:
-            loop.close()
-
+        # Use asyncio.run for proper async execution
+        return asyncio.run(_send_async())
     except Exception as exc:
         # Email failures are critical, retry more aggressively
         raise self.retry(countdown=30 * (2 ** self.request.retries), exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_validation_email(self, validation_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Send a validation email asynchronously."""
+    async def _send_validation_async():
+        # Proper async database session management
+        from ..database.connection import async_session_factory
+
+        async with async_session_factory() as db_session:
+            email_agent = agent_registry.get_agent("email")
+
+            # Format validation email data
+            email_data = {
+                "subject": f"Capability Validation - {validation_data.get('project_title', 'Project')}",
+                "body": f"Question: {validation_data.get('question', 'Unknown')}\n\nPlease reply with Yes/No/Limited with any additional context.",
+                "to_email": validation_data.get("recipient_email", "unknown@example.com"),
+                "to_name": validation_data.get("recipient_name", ""),
+                "metadata": {
+                    "type": "validation_request",
+                    "validation_id": validation_data.get("validation_id"),
+                    "attribute_path": validation_data.get("attribute_path"),
+                    "project_title": validation_data.get("project_title")
+                }
+            }
+
+            context = AgentContext(
+                project_id=0,  # Not project-specific
+                db_session=db_session,
+                data={"action": "send_email", "email": email_data}
+            )
+
+            return await email_agent.execute(context)
+
+    try:
+        # Use asyncio.run for proper async execution
+        return asyncio.run(_send_validation_async())
+    except Exception as exc:
+        # Validation emails are important but not critical
+        raise self.retry(countdown=60 * (2 ** self.request.retries), exc=exc)
 
 
 @celery_app.task(bind=True, max_retries=3)

@@ -145,34 +145,60 @@ class OrchestratorAgent(BaseAgent):
         self.redis = redis_client
 
     async def execute(self, context: AgentContext) -> Dict[str, Any]:
-        """Coordinate workflow execution."""
+        """Coordinate workflow execution with error recovery."""
         self.log_execution_start(context)
 
         try:
-            # Get current project state
-            project_state = await self._get_project_state(context.project_id, context.db_session)
+            # Check for existing checkpoint to resume from failure
+            checkpoint = await self._load_checkpoint(context.project_id, self.name)
+            if checkpoint and checkpoint.get("status") == "failed":
+                self.logger.info(f"Resuming orchestrator from checkpoint")
+                return await self._resume_from_checkpoint(checkpoint, context)
 
-            # Check for timeouts
-            if await self._check_timeouts(project_state):
-                await self._handle_timeout(context.project_id, project_state, context.db_session)
-                return {"status": "timeout_handled"}
+            # Execute main coordination logic with retry
+            result = await self._execute_core(context)
 
-            # Determine next action
-            next_action = await self._decide_next_action(project_state)
-
-            # Execute next action
-            result = await self._execute_action(next_action, context)
-
-            # Update project state
-            await self._update_project_state(context.project_id, result, context.db_session)
+            # Clear any previous checkpoints on success
+            await self._clear_checkpoint(context.project_id, self.name)
 
             self.log_execution_end(context, result)
             return result
 
         except Exception as e:
+            # Save error state for recovery
+            error_data = {
+                "error": str(e),
+                "context": {
+                    "project_id": context.project_id,
+                    "task_id": context.task_id
+                }
+            }
+            await self._save_checkpoint(context.project_id, self.name, "failed", error_data)
+
             self.logger.error(f"Orchestrator execution failed: {str(e)}", exc_info=True)
             await self._handle_error(context.project_id, str(e))
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": str(e), "checkpoint_saved": True}
+
+    async def _execute_core(self, context: AgentContext) -> Dict[str, Any]:
+        """Core orchestration logic."""
+        # Get current project state
+        project_state = await self._get_project_state(context.project_id, context.db_session)
+
+        # Check for timeouts
+        if await self._check_timeouts(project_state):
+            await self._handle_timeout(context.project_id, project_state, context.db_session)
+            return {"status": "timeout_handled"}
+
+        # Determine next action
+        next_action = await self._decide_next_action(project_state)
+
+        # Execute next action
+        result = await self._execute_action(next_action, context)
+
+        # Update project state
+        await self._update_project_state(context.project_id, result, context.db_session)
+
+        return result
 
     async def _get_project_state(self, project_id: int, db_session: Optional[AsyncSession] = None) -> Dict[str, Any]:
         """Get current project state from database."""
@@ -438,6 +464,79 @@ class AgentRegistry:
     def list_agents(self) -> List[str]:
         """List all registered agent names."""
         return list(self.agents.keys())
+
+    # Error Recovery and Checkpointing Methods (for subclasses to use)
+
+    async def _execute_with_retry(self, context: AgentContext, max_retries: int = 2) -> Dict[str, Any]:
+        """Execute agent logic with retry on transient failures."""
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                return await self._execute_core(context)
+            except Exception as e:
+                last_error = e
+                self.logger.warning(f"Agent execution attempt {attempt + 1} failed: {str(e)}")
+
+                # Don't retry on the last attempt
+                if attempt == max_retries:
+                    break
+
+                # Exponential backoff
+                await asyncio.sleep(2 ** attempt)
+
+        # All retries failed
+        raise last_error
+
+    async def _execute_core(self, context: AgentContext) -> Dict[str, Any]:
+        """Core execution logic - override in subclasses."""
+        raise NotImplementedError("Subclasses must implement _execute_core")
+
+    async def _load_checkpoint(self, project_id: int, agent_name: str) -> Optional[Dict[str, Any]]:
+        """Load checkpoint data for error recovery."""
+        try:
+            from ..core.redis_client import cache_get
+            key = f"checkpoint:{project_id}:{agent_name}"
+            checkpoint_data = await cache_get(key)
+
+            if checkpoint_data:
+                import json
+                return json.loads(checkpoint_data)
+
+        except Exception as e:
+            self.logger.error(f"Failed to load checkpoint: {e}")
+
+        return None
+
+    async def _save_checkpoint(self, project_id: int, agent_name: str, status: str, data: Dict[str, Any]) -> None:
+        """Save checkpoint data for error recovery."""
+        try:
+            from ..core.redis_client import cache_set
+            import json
+
+            checkpoint_data = {
+                "status": status,
+                "data": data,
+                "agent_name": agent_name,
+                "project_id": project_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+            key = f"checkpoint:{project_id}:{agent_name}"
+            await cache_set(key, json.dumps(checkpoint_data), ttl_seconds=86400)  # 24 hours
+
+        except Exception as e:
+            self.logger.error(f"Failed to save checkpoint: {e}")
+
+    async def _clear_checkpoint(self, project_id: int, agent_name: str) -> None:
+        """Clear checkpoint after successful completion."""
+        try:
+            from ..core.redis_client import cache_delete
+            key = f"checkpoint:{project_id}:{agent_name}"
+            await cache_delete(key)
+
+        except Exception as e:
+            self.logger.error(f"Failed to clear checkpoint: {e}")
 
 
 # Global agent registry

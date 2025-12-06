@@ -238,38 +238,146 @@ Return JSON with title, content (as array of strings), layout, visual_elements, 
 
     async def _generate_pptx_with_claude(self, slides_content: List[Dict[str, Any]], assets: List[Dict[str, Any]], design: Dict[str, Any]) -> bytes:
         """Use Claude's document creation skills to generate PPTX file."""
-        # In production, this would use Claude's specialized PPTX generation capabilities
-        # For now, return mock PPTX content
+        try:
+            # Use Claude Sonnet for document generation (as specified in requirements)
+            prompt = self._build_pptx_generation_prompt(slides_content, assets, design)
 
-        prompt = f"""
-You are creating a professional PowerPoint presentation for a market research proposal.
+            response = await self.generate_text(
+                prompt,
+                provider=Provider.CLAUDE,
+                model="claude-3-sonnet-20240229",
+                temperature=0.1,
+                max_tokens=8000
+            )
 
-Presentation Structure:
+            # Claude will generate a structured representation of the PPTX
+            # In a real implementation, this would be converted to actual PPTX binary
+            # For now, we'll store the structured content and simulate PPTX creation
+
+            pptx_structure = self._parse_claude_pptx_response(response)
+
+            # Simulate PPTX binary generation
+            pptx_data = self._create_mock_pptx_binary(pptx_structure)
+
+            return pptx_data
+
+        except Exception as e:
+            self.logger.error(f"Claude PPTX generation failed: {e}")
+            # Fallback to basic mock
+            return self._create_fallback_pptx(slides_content)
+
+    def _build_pptx_generation_prompt(self, slides_content: List[Dict[str, Any]], assets: List[Dict[str, Any]], design: Dict[str, Any]) -> str:
+        """Build comprehensive prompt for Claude PPTX generation."""
+        return f"""
+You are an expert PowerPoint designer creating a professional market research proposal presentation.
+
+PRESENTATION OVERVIEW:
 {json.dumps(design, indent=2)}
 
-Slides Content:
-{json.dumps(slides_content[:5], indent=2)}  # First 5 slides for brevity
+SLIDES TO CREATE:
+{json.dumps(slides_content, indent=2)}
 
-Assets Available:
+AVAILABLE ASSETS:
 {json.dumps(assets, indent=2)}
 
-Generate a PPTX file with:
-1. Professional template and branding
-2. Consistent styling throughout
-3. Proper hierarchy and formatting
-4. Visual elements and charts where appropriate
-5. Speaker notes for each slide
+REQUIREMENTS:
+1. **Professional Design**: Clean, modern template with consistent branding
+2. **Visual Hierarchy**: Clear titles, proper font sizes, strategic use of color
+3. **Content Layout**: Balance text and visuals, avoid overcrowding
+4. **Data Visualization**: Use charts/graphs where data is presented
+5. **Speaker Notes**: Include detailed notes for each slide
+6. **Accessibility**: High contrast, readable fonts, alt text for images
 
-The presentation should be client-ready and follow presentation best practices.
+OUTPUT FORMAT:
+Provide a structured JSON representation of the PPTX file with:
+- Master slide layouts
+- Individual slide specifications
+- Content blocks with positioning
+- Styling information
+- Speaker notes
 
-[In production, Claude would generate actual PPTX binary data here]
+The JSON should be parseable and contain all information needed to reconstruct the presentation.
+
+Example structure:
+{{
+  "presentation": {{
+    "title": "Market Research Proposal",
+    "template": "professional_blue",
+    "slides": [
+      {{
+        "number": 1,
+        "layout": "title_slide",
+        "title": "Executive Summary",
+        "content": [...],
+        "notes": "Opening remarks..."
+      }}
+    ]
+  }}
+}}
 """
 
-        # Mock response - in production would return actual PPTX bytes
-        response = await self.generate_text(prompt, temperature=0.1)
-        mock_pptx_data = response.encode('utf-8')  # Mock binary data
+    def _parse_claude_pptx_response(self, response: str) -> Dict[str, Any]:
+        """Parse Claude's PPTX generation response."""
+        try:
+            # Try to extract JSON from the response
+            start_idx = response.find('{')
+            end_idx = response.rfind('}') + 1
 
-        return mock_pptx_data
+            if start_idx >= 0 and end_idx > start_idx:
+                json_str = response[start_idx:end_idx]
+                return json.loads(json_str)
+            else:
+                raise ValueError("No JSON found in response")
+
+        except (json.JSONDecodeError, ValueError) as e:
+            self.logger.warning(f"Failed to parse Claude PPTX response: {e}")
+            # Return a basic structure
+            return {
+                "presentation": {
+                    "title": "Market Research Proposal",
+                    "slides": []
+                }
+            }
+
+    def _create_mock_pptx_binary(self, pptx_structure: Dict[str, Any]) -> bytes:
+        """Create mock PPTX binary data from structure."""
+        # In a real implementation, this would use a library like python-pptx
+        # to create actual PPTX files
+
+        # For now, create a structured representation that could be used
+        # by a PPTX generation library
+
+        mock_data = {
+            "format": "pptx",
+            "structure": pptx_structure,
+            "generated_at": datetime.utcnow().isoformat(),
+            "metadata": {
+                "slide_count": len(pptx_structure.get("presentation", {}).get("slides", [])),
+                "template": pptx_structure.get("presentation", {}).get("template", "default")
+            }
+        }
+
+        return json.dumps(mock_data).encode('utf-8')
+
+    def _create_fallback_pptx(self, slides_content: List[Dict[str, Any]]) -> bytes:
+        """Create fallback PPTX when Claude generation fails."""
+        fallback_structure = {
+            "presentation": {
+                "title": "Market Research Proposal",
+                "template": "fallback",
+                "slides": [
+                    {
+                        "number": i + 1,
+                        "title": slide.get("title", f"Slide {i + 1}"),
+                        "content": slide.get("content", []),
+                        "layout": slide.get("layout", "content")
+                    }
+                    for i, slide in enumerate(slides_content[:10])  # Limit to first 10 slides
+                ]
+            }
+        }
+
+        return json.dumps(fallback_structure).encode('utf-8')
 
     async def _revise_presentation(self, context: AgentContext) -> Dict[str, Any]:
         """Revise presentation based on feedback."""

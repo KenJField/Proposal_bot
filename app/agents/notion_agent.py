@@ -5,6 +5,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from notion_client import Client
+from notion_client.errors import APIResponseError
+
 from ..core.agent import BaseAgent, AgentContext
 from ..core.config import settings
 from ..core.llm import Provider
@@ -21,8 +24,14 @@ class NotionAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        # In production, would initialize Notion client
-        self.notion_client = None
+
+        # Initialize Notion client
+        if settings.notion_token:
+            self.notion_client = Client(auth=settings.notion_token)
+            self.logger.info("Notion client initialized successfully")
+        else:
+            self.notion_client = None
+            self.logger.warning("Notion token not configured - running in mock mode")
 
     async def execute(self, context: AgentContext) -> Dict[str, Any]:
         """Execute Notion workspace management tasks."""
@@ -318,33 +327,329 @@ Use Notion formatting with databases for phases and resources.
                 data={"status": new_status, "status_details": feedback}
             ))
 
-    # Mock implementations for Notion API calls (would use actual Notion SDK in production)
+    # Real Notion API implementations
 
     async def _create_notion_page(self, title: str, content: Dict[str, Any], database_id: Optional[str] = None) -> str:
         """Create a new page in Notion."""
-        # Mock implementation - would use Notion API
-        page_id = f"page_{hash(title + str(datetime.utcnow()))}"
-        self.logger.info(f"Created Notion page: {page_id} - {title}")
+        if not self.notion_client:
+            return self._mock_create_page(title, content, database_id)
+
+        try:
+            # Prepare page properties
+            properties = {
+                "Name": {
+                    "title": [
+                        {
+                            "text": {
+                                "content": title
+                            }
+                        }
+                    ]
+                }
+            }
+
+            # Add creation timestamp
+            properties["Created"] = {
+                "date": {
+                    "start": datetime.utcnow().isoformat()
+                }
+            }
+
+            # Prepare page data
+            page_data = {
+                "properties": properties,
+            }
+
+            # If database_id provided, create in database
+            if database_id:
+                page_data["parent"] = {"database_id": database_id}
+            else:
+                # Create in default location (would need to configure a default page)
+                page_data["parent"] = {"type": "page_id", "page_id": settings.notion_database_ids.get("root_page")}
+
+            # Add content blocks
+            if content.get("blocks"):
+                page_data["children"] = self._convert_content_to_blocks(content)
+
+            # Create the page
+            response = self.notion_client.pages.create(**page_data)
+            page_id = response["id"]
+
+            self.logger.info(f"Created Notion page: {page_id} - {title}")
+            return page_id
+
+        except APIResponseError as e:
+            self.logger.error(f"Notion API error creating page: {e}")
+            return self._mock_create_page(title, content, database_id)
+        except Exception as e:
+            self.logger.error(f"Unexpected error creating Notion page: {e}")
+            return self._mock_create_page(title, content, database_id)
+
+    def _convert_content_to_blocks(self, content: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Convert content structure to Notion blocks."""
+        blocks = []
+
+        if content.get("blocks"):
+            for block in content["blocks"]:
+                block_type = block.get("type", "paragraph")
+                block_content = block.get("content", "")
+
+                if block_type == "heading_1":
+                    blocks.append({
+                        "object": "block",
+                        "type": "heading_1",
+                        "heading_1": {
+                            "rich_text": [{"type": "text", "text": {"content": block_content}}]
+                        }
+                    })
+                elif block_type == "heading_2":
+                    blocks.append({
+                        "object": "block",
+                        "type": "heading_2",
+                        "heading_2": {
+                            "rich_text": [{"type": "text", "text": {"content": block_content}}]
+                        }
+                    })
+                elif block_type == "callout":
+                    blocks.append({
+                        "object": "block",
+                        "type": "callout",
+                        "callout": {
+                            "rich_text": [{"type": "text", "text": {"content": block_content}}],
+                            "icon": {"emoji": "ℹ️"}
+                        }
+                    })
+                else:  # default to paragraph
+                    blocks.append({
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{"type": "text", "text": {"content": block_content}}]
+                        }
+                    })
+
+        return blocks
+
+    def _mock_create_page(self, title: str, content: Dict[str, Any], database_id: Optional[str] = None) -> str:
+        """Fallback mock implementation."""
+        page_id = f"mock_page_{hash(title + str(datetime.utcnow()))}"
+        self.logger.warning(f"Created mock Notion page (API unavailable): {page_id} - {title}")
         return page_id
 
     async def _update_notion_page(self, page_id: str, content: Dict[str, Any]) -> None:
         """Update an existing Notion page."""
-        # Mock implementation
-        self.logger.info(f"Updated Notion page: {page_id}")
+        if not self.notion_client:
+            self.logger.warning(f"Mock update Notion page (API unavailable): {page_id}")
+            return
+
+        try:
+            # Append new blocks to the page
+            if content.get("blocks"):
+                blocks = self._convert_content_to_blocks(content)
+
+                for block in blocks:
+                    self.notion_client.blocks.children.append(
+                        block_id=page_id,
+                        children=[block]
+                    )
+
+            self.logger.info(f"Updated Notion page: {page_id}")
+
+        except APIResponseError as e:
+            self.logger.error(f"Notion API error updating page: {e}")
+        except Exception as e:
+            self.logger.error(f"Unexpected error updating Notion page: {e}")
 
     async def _create_phase_database(self, parent_page_id: str, phases: List[Dict[str, Any]]) -> str:
         """Create a database for project phases."""
-        # Mock implementation
-        db_id = f"phase_db_{hash(parent_page_id)}"
-        self.logger.info(f"Created phase database: {db_id}")
-        return db_id
+        if not self.notion_client:
+            db_id = f"mock_phase_db_{hash(parent_page_id)}"
+            self.logger.warning(f"Created mock phase database (API unavailable): {db_id}")
+            return db_id
+
+        try:
+            # Create database properties
+            properties = {
+                "Name": {"title": {}},
+                "Phase": {"rich_text": {}},
+                "Start Date": {"date": {}},
+                "End Date": {"date": {}},
+                "Status": {
+                    "select": {
+                        "options": [
+                            {"name": "Not Started", "color": "gray"},
+                            {"name": "In Progress", "color": "blue"},
+                            {"name": "Completed", "color": "green"},
+                            {"name": "Blocked", "color": "red"}
+                        ]
+                    }
+                },
+                "Assigned To": {"rich_text": {}}
+            }
+
+            database_data = {
+                "parent": {"type": "page_id", "page_id": parent_page_id},
+                "title": [{"type": "text", "text": {"content": "Project Phases"}}],
+                "properties": properties
+            }
+
+            response = self.notion_client.databases.create(**database_data)
+            db_id = response["id"]
+
+            # Add initial phase entries
+            if phases:
+                await self._populate_phase_database(db_id, phases)
+
+            self.logger.info(f"Created phase database: {db_id}")
+            return db_id
+
+        except APIResponseError as e:
+            self.logger.error(f"Notion API error creating phase database: {e}")
+            return f"mock_phase_db_{hash(parent_page_id)}"
+        except Exception as e:
+            self.logger.error(f"Unexpected error creating phase database: {e}")
+            return f"mock_phase_db_{hash(parent_page_id)}"
 
     async def _create_resource_allocation_database(self, parent_page_id: str, resources: List[Dict[str, Any]]) -> str:
         """Create a database for resource allocation."""
-        # Mock implementation
-        db_id = f"resource_db_{hash(parent_page_id)}"
-        self.logger.info(f"Created resource database: {db_id}")
-        return db_id
+        if not self.notion_client:
+            db_id = f"mock_resource_db_{hash(parent_page_id)}"
+            self.logger.warning(f"Created mock resource database (API unavailable): {db_id}")
+            return db_id
+
+        try:
+            # Create database properties
+            properties = {
+                "Name": {"title": {}},
+                "Role": {"rich_text": {}},
+                "Type": {
+                    "select": {
+                        "options": [
+                            {"name": "Person", "color": "blue"},
+                            {"name": "Vendor", "color": "green"},
+                            {"name": "Tool", "color": "yellow"}
+                        ]
+                    }
+                },
+                "Availability": {"rich_text": {}},
+                "Allocation %": {"number": {}},
+                "Start Date": {"date": {}},
+                "End Date": {"date": {}}
+            }
+
+            database_data = {
+                "parent": {"type": "page_id", "page_id": parent_page_id},
+                "title": [{"type": "text", "text": {"content": "Resource Allocation"}}],
+                "properties": properties
+            }
+
+            response = self.notion_client.databases.create(**database_data)
+            db_id = response["id"]
+
+            # Add initial resource entries
+            if resources:
+                await self._populate_resource_database(db_id, resources)
+
+            self.logger.info(f"Created resource database: {db_id}")
+            return db_id
+
+        except APIResponseError as e:
+            self.logger.error(f"Notion API error creating resource database: {e}")
+            return f"mock_resource_db_{hash(parent_page_id)}"
+        except Exception as e:
+            self.logger.error(f"Unexpected error creating resource database: {e}")
+            return f"mock_resource_db_{hash(parent_page_id)}"
+
+    async def _populate_phase_database(self, database_id: str, phases: List[Dict[str, Any]]) -> None:
+        """Populate phase database with initial data."""
+        if not self.notion_client:
+            return
+
+        for phase in phases:
+            try:
+                page_data = {
+                    "parent": {"database_id": database_id},
+                    "properties": {
+                        "Name": {
+                            "title": [
+                                {
+                                    "text": {
+                                        "content": phase.get("name", "Unnamed Phase")
+                                    }
+                                }
+                            ]
+                        },
+                        "Phase": {
+                            "rich_text": [
+                                {
+                                    "text": {
+                                        "content": phase.get("description", "")
+                                    }
+                                }
+                            ]
+                        },
+                        "Status": {
+                            "select": {
+                                "name": "Not Started"
+                            }
+                        }
+                    }
+                }
+
+                self.notion_client.pages.create(**page_data)
+
+            except Exception as e:
+                self.logger.error(f"Failed to add phase to database: {e}")
+
+    async def _populate_resource_database(self, database_id: str, resources: List[Dict[str, Any]]) -> None:
+        """Populate resource database with initial data."""
+        if not self.notion_client:
+            return
+
+        for resource in resources:
+            try:
+                page_data = {
+                    "parent": {"database_id": database_id},
+                    "properties": {
+                        "Name": {
+                            "title": [
+                                {
+                                    "text": {
+                                        "content": resource.get("name", "Unnamed Resource")
+                                    }
+                                }
+                            ]
+                        },
+                        "Role": {
+                            "rich_text": [
+                                {
+                                    "text": {
+                                        "content": resource.get("role", "")
+                                    }
+                                }
+                            ]
+                        },
+                        "Type": {
+                            "select": {
+                                "name": resource.get("type", "Person").title()
+                            }
+                        },
+                        "Availability": {
+                            "rich_text": [
+                                {
+                                    "text": {
+                                        "content": resource.get("availability", "Unknown")
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+
+                self.notion_client.pages.create(**page_data)
+
+            except Exception as e:
+                self.logger.error(f"Failed to add resource to database: {e}")
 
     async def _add_to_activity_feed(self, activity_data: Dict[str, Any], db_session) -> None:
         """Add activity to the activity feed database."""

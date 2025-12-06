@@ -5,6 +5,7 @@ import email
 import imaplib
 import json
 import logging
+import os
 import smtplib
 import uuid
 from datetime import datetime, timedelta
@@ -12,7 +13,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..core.redis_client import get_redis_client
 
@@ -64,6 +68,15 @@ class EmailAgent(BaseAgent):
         super().__init__(**kwargs)
         self.redis = get_redis_client()
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+        # Initialize Jinja2 template environment
+        template_dir = Path(__file__).parent / "templates"
+        template_dir.mkdir(exist_ok=True)
+
+        self.template_env = Environment(
+            loader=FileSystemLoader(template_dir),
+            autoescape=select_autoescape(['html', 'xml'])
+        )
 
     async def execute(self, context: AgentContext) -> Dict[str, Any]:
         """Execute email agent tasks."""
@@ -295,68 +308,73 @@ class EmailAgent(BaseAgent):
         }
 
     async def _generate_validation_email(self, validation_data: Dict[str, Any]) -> Dict[str, str]:
-        """Generate contextual validation request email."""
-        prompt = f"""
-Generate a professional email asking a team member to validate their capability for a market research project.
-
-Context:
-- Attribute to validate: {validation_data.get('attribute_path', 'Unknown')}
-- Question: {validation_data.get('question', 'Unknown')}
-- Project: {validation_data.get('project_title', 'Market Research Project')}
-- Deadline: Within 72 hours
-
-The email should be:
-- Professional and concise
-- Include specific question to answer
-- Explain why validation is needed
-- Provide clear response instructions
-
-Return JSON with "subject" and "body" fields.
-"""
-
-        response = await self.generate_text(prompt, temperature=0.3)
-        # Parse JSON response
-        import json
+        """Generate validation request email using template."""
         try:
-            return json.loads(response)
-        except:
+            template = self.template_env.get_template('validation_request.html')
+
+            # Prepare template variables
+            template_vars = {
+                'recipient_name': validation_data.get('recipient_name', ''),
+                'question': validation_data.get('question', ''),
+                'project_title': validation_data.get('project_title', 'Market Research Project'),
+                'urgency': validation_data.get('priority', 'medium'),
+                'deadline_hours': validation_data.get('deadline_hours', 72)
+            }
+
+            # Render HTML body
+            html_body = template.render(**template_vars)
+
+            # Generate subject
+            subject = f"Capability Validation Request - {validation_data.get('project_title', 'Market Research Project')}"
+
+            return {
+                "subject": subject,
+                "body": html_body
+            }
+
+        except Exception as e:
+            self.logger.error(f"Template rendering failed: {e}")
+            # Fallback to simple text
             return {
                 "subject": f"Validation Request: {validation_data.get('attribute_path', 'Capability')}",
                 "body": f"Please validate: {validation_data.get('question', 'Unknown question')}"
             }
 
     async def _generate_clarification_email(self, clarification_data: Dict[str, Any]) -> Dict[str, str]:
-        """Generate clarification request email to client."""
-        questions = clarification_data.get("questions", [])
-
-        prompt = f"""
-Generate a professional email asking a client for clarification on RFP requirements.
-
-Questions to ask:
-{chr(10).join(f"- {q}" for q in questions)}
-
-Context:
-- Client: {clarification_data.get('client_name', 'Valued Client')}
-- Project: {clarification_data.get('project_title', 'Market Research Project')}
-
-The email should be:
-- Professional and client-appropriate
-- Clear and specific questions
-- Explain why clarification is needed
-- Provide reasonable response timeline
-
-Return JSON with "subject" and "body" fields.
-"""
-
-        response = await self.generate_text(prompt, temperature=0.3)
-        # Parse JSON response
-        import json
+        """Generate clarification request email using template."""
         try:
-            return json.loads(response)
-        except:
+            template = self.template_env.get_template('clarification_request.html')
+
+            # Prepare template variables
+            template_vars = {
+                'client_name': clarification_data.get('client_name', 'Valued Client'),
+                'questions': clarification_data.get('questions', []),
+                'project_title': clarification_data.get('project_title', 'Market Research Project'),
+                'urgency': clarification_data.get('urgency', 'normal'),
+                'deadline_hours': clarification_data.get('deadline_hours', 72),
+                'company_name': 'Market Research Solutions',  # Could be configurable
+                'reply_email': settings.smtp_username,
+                'phone': '(555) 123-4567'  # Could be configurable
+            }
+
+            # Render HTML body
+            html_body = template.render(**template_vars)
+
+            # Generate subject
+            subject = f"Clarification Request - {clarification_data.get('project_title', 'Market Research Proposal')}"
+
+            return {
+                "subject": subject,
+                "body": html_body
+            }
+
+        except Exception as e:
+            self.logger.error(f"Template rendering failed: {e}")
+            # Fallback to simple text
+            questions = clarification_data.get("questions", [])
             return {
                 "subject": f"Clarification Needed: {clarification_data.get('project_title', 'Project')}",
-                "body": f"We need clarification on: {chr(10).join(questions)}"
+                "body": f"We need clarification on: {chr(10).join(str(q) for q in questions)}"
             }
 
     async def _send_email_via_smtp(self, email_msg: EmailMessage) -> None:
@@ -374,8 +392,11 @@ Return JSON with "subject" and "body" fields.
                 msg['In-Reply-To'] = email_msg.metadata["parent_message_id"]
                 msg['References'] = email_msg.metadata["parent_message_id"]
 
-        # Add body
-        msg.attach(MIMEText(email_msg.body, 'html'))
+        # Add body - check if it's HTML or plain text
+        if '<html' in email_msg.body.lower() or '<body' in email_msg.body.lower():
+            msg.attach(MIMEText(email_msg.body, 'html'))
+        else:
+            msg.attach(MIMEText(email_msg.body, 'plain'))
 
         # Add attachments
         for attachment in email_msg.attachments:
@@ -588,12 +609,13 @@ Return JSON with:
     async def _is_duplicate_email(self, email_msg: EmailMessage) -> bool:
         """Check if this email is a duplicate."""
         key = f"email_sent:{email_msg.to_email}:{hash(email_msg.subject + email_msg.body) % 10000}"
-        return bool(self.redis.exists(key))
+        exists = await self.redis.exists(key)
+        return bool(exists)
 
     async def _mark_email_sent(self, email_msg: EmailMessage) -> None:
         """Mark email as sent for deduplication."""
         key = f"email_sent:{email_msg.to_email}:{hash(email_msg.subject + email_msg.body) % 10000}"
-        self.redis.setex(key, settings.email_deduplication_ttl, "1")
+        await self.redis.setex(key, settings.email_deduplication_ttl, "1")
 
     async def _track_thread(self, email_msg: EmailMessage) -> None:
         """Track email thread in Redis."""
@@ -611,16 +633,15 @@ Return JSON with:
             "metadata": email_msg.metadata
         }
 
-        self.redis.set(thread_key, json.dumps(thread_data))
+        await self.redis.set(thread_key, json.dumps(thread_data))
 
     async def _get_thread(self, thread_id: str) -> Optional[EmailThread]:
         """Get thread information from Redis."""
         thread_key = f"thread:{thread_id}"
-        data = self.redis.get(thread_key)
+        data = await self.redis.get(thread_key)
 
         if data:
-            import json
-            thread_dict = json.loads(data)
+            thread_dict = json.loads(data.decode())
             return EmailThread(**thread_dict)
 
         return None
@@ -634,4 +655,4 @@ Return JSON with:
             thread.last_message_at = datetime.utcnow()
 
             thread_key = f"thread:{thread_id}"
-            self.redis.set(thread_key, thread.model_dump_json())
+            await self.redis.set(thread_key, thread.model_dump_json())

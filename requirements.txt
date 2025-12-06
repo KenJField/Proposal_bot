@@ -22,6 +22,7 @@ email-validator==2.1.0
 requests==2.31.0
 beautifulsoup4==4.12.2
 google-api-python-client==2.108.0
+google-search-results==2.4.2
 
 # Notion integration
 notion-client==2.0.0
@@ -32,6 +33,7 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 python-multipart==0.0.6
 jinja2==3.1.2
+aiofiles==23.2.1
 structlog==23.2.0
 
 # Development
