@@ -1,0 +1,45 @@
+{
+  "id": "brief_2024_003",
+  "client_name": "HealthTech Solutions Inc",
+  "client_contact": "Dr. Maria Garcia",
+  "client_email": "m.garcia@healthtechsolutions.com",
+  "title": "Patient Experience Research for New Telehealth Platform",
+  "description": "HealthTech Solutions is developing a telehealth platform for chronic disease management. We want to understand patient experiences with existing telehealth solutions and get feedback on our platform concept. The research will help us refine our product before beta testing.",
+  "objectives": [
+    "Understand current patient satisfaction with telehealth services",
+    "Identify barriers to telehealth adoption among chronic disease patients",
+    "Get feedback on our platform concept and key features",
+    "Understand what would make patients switch from current solutions"
+  ],
+  "requirements": {
+    "target_audience": "Patients with chronic conditions (diabetes, hypertension, COPD) who have used telehealth in past 12 months",
+    "required_sample_size": "Not sure - need your recommendation",
+    "compliance_requirements": ["HIPAA compliance required"]
+  },
+  "status": "received",
+  "sales_rep": "Sarah Williams",
+  "budget_range": [40000, 60000],
+  "timeline": "Need results by end of Q3",
+  "target_audience": "Chronic disease patients with telehealth experience",
+  "methodology_preferences": [
+    "surveys",
+    "maybe some interviews with patients"
+  ],
+  "deliverables": [
+    "report with findings",
+    "presentation"
+  ],
+  "past_projects": [],
+  "crm_data": {
+    "client_since": "2024",
+    "industry": "Healthcare Technology",
+    "relationship_status": "new"
+  },
+  "web_research": {
+    "company_size": "~80 employees",
+    "funding_stage": "Series A",
+    "product_category": "Telehealth/Chronic Care Management"
+  },
+  "received_at": "2024-06-03T09:15:00Z",
+  "updated_at": "2024-06-03T09:15:00Z"
+}

@@ -1,0 +1,28 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "proposal_workflow": {
+      "path": "./proposal_bot/graphs/proposal_workflow.py",
+      "graph": "ProposalWorkflow",
+      "description": "Multi-agent workflow for automated market research proposal generation",
+      "checkpointer": "sqlite"
+    }
+  },
+  "environment_variables": [
+    "ANTHROPIC_API_KEY",
+    "LANGCHAIN_TRACING_V2",
+    "LANGCHAIN_API_KEY",
+    "LANGCHAIN_PROJECT",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GOOGLE_REFRESH_TOKEN",
+    "STAFF_PROFILES_SHEET_ID",
+    "PRICING_SHEET_ID",
+    "VENDOR_RELATIONSHIPS_SHEET_ID",
+    "CAPABILITIES_SHEET_ID",
+    "GMAIL_USER_EMAIL"
+  ],
+  "python_version": "3.11"
+}
