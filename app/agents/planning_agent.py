@@ -529,15 +529,14 @@ Return JSON array of design questions.
         email_agent = agent_registry.get_agent("email")
 
         await email_agent.execute(AgentContext(
-            await email_agent.execute(AgentContext(
-                project_id=context.project_id,
-                db_session=context.db_session,
-                data={
-                    "action": "send_design_questions",
-                    "questions": questions,
-                    "recipient": "project_lead@example.com"  # Would be determined from requirements
-                }
-            ))
+            project_id=context.project_id,
+            db_session=context.db_session,
+            data={
+                "action": "send_design_questions",
+                "questions": questions,
+                "recipient": "project_lead@example.com"  # Would be determined from requirements
+            }
+        ))
 
     async def _save_project_plan(self, project_id: int, plan: Dict[str, Any], db_session) -> None:
         """Save project plan to database."""

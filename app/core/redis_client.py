@@ -1,22 +1,27 @@
 """Redis client configuration and utilities."""
 
 import redis.asyncio as redis
+from typing import Optional
 from .config import settings
 
-# Create async Redis client
-redis_client = redis.from_url(settings.redis_url)
-
-# Test connection
-try:
-    redis_client.ping()
-except redis.ConnectionError:
-    print("Warning: Could not connect to Redis")
-    redis_client = None
-
+# Create async Redis client (lazy initialization)
+_redis_client = None
 
 def get_redis_client() -> redis.Redis:
+    """Get Redis client instance with lazy initialization."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            _redis_client = redis.from_url(settings.redis_url)
+        except Exception as e:
+            print(f"Warning: Could not create Redis client: {e}")
+            _redis_client = None
+    return _redis_client
+
+
+def get_redis_client() -> Optional[redis.Redis]:
     """Get Redis client instance."""
-    return redis_client
+    return _redis_client
 
 
 # Project lock management
@@ -65,6 +70,7 @@ def renew_project_lock(project_id: int, agent_name: str, ttl_seconds: int = 300)
 # Email deduplication
 async def check_email_deduplication(email_key: str) -> bool:
     """Check if email was recently sent."""
+    redis_client = get_redis_client()
     if not redis_client:
         return False
 
@@ -75,6 +81,7 @@ async def check_email_deduplication(email_key: str) -> bool:
 
 async def mark_email_sent(email_key: str, ttl_seconds: int = 172800) -> None:
     """Mark email as sent for deduplication."""
+    redis_client = get_redis_client()
     if redis_client:
         key = f"email_sent:{email_key}"
         await redis_client.setex(key, ttl_seconds, "1")
@@ -83,6 +90,7 @@ async def mark_email_sent(email_key: str, ttl_seconds: int = 172800) -> None:
 # Thread tracking
 async def store_email_thread(thread_id: str, thread_data: dict, ttl_seconds: int = 604800) -> None:
     """Store email thread information."""
+    redis_client = get_redis_client()
     if redis_client:
         key = f"thread:{thread_id}"
         await redis_client.setex(key, ttl_seconds, json.dumps(thread_data))
@@ -90,6 +98,7 @@ async def store_email_thread(thread_id: str, thread_data: dict, ttl_seconds: int
 
 async def get_email_thread(thread_id: str) -> Optional[dict]:
     """Retrieve email thread information."""
+    redis_client = get_redis_client()
     if not redis_client:
         return None
 
@@ -98,7 +107,8 @@ async def get_email_thread(thread_id: str) -> Optional[dict]:
 
     if data:
         try:
-            return json.loads(data.decode())
+            thread_dict = json.loads(data.decode())
+            return thread_dict
         except:
             return None
 
@@ -108,12 +118,14 @@ async def get_email_thread(thread_id: str) -> Optional[dict]:
 # Work queue management
 async def add_to_work_queue(work_item: str, priority: int = 50) -> None:
     """Add item to priority work queue."""
+    redis_client = get_redis_client()
     if redis_client:
         await redis_client.zadd("work_queue", {work_item: priority})
 
 
 async def get_work_queue_length() -> int:
     """Get work queue length."""
+    redis_client = get_redis_client()
     if not redis_client:
         return 0
 
@@ -123,6 +135,7 @@ async def get_work_queue_length() -> int:
 # Cache management
 async def cache_get(key: str) -> Optional[str]:
     """Get value from cache."""
+    redis_client = get_redis_client()
     if not redis_client:
         return None
 
@@ -132,12 +145,14 @@ async def cache_get(key: str) -> Optional[str]:
 
 async def cache_set(key: str, value: str, ttl_seconds: int = 3600) -> None:
     """Set value in cache."""
+    redis_client = get_redis_client()
     if redis_client:
         await redis_client.setex(key, ttl_seconds, value)
 
 
 async def cache_delete(key: str) -> None:
     """Delete value from cache."""
+    redis_client = get_redis_client()
     if redis_client:
         await redis_client.delete(key)
 
@@ -145,6 +160,7 @@ async def cache_delete(key: str) -> None:
 # Health check
 async def redis_health_check() -> dict:
     """Check Redis health."""
+    redis_client = get_redis_client()
     if not redis_client:
         return {"status": "unavailable", "error": "Redis client not initialized"}
 

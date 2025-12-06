@@ -26,7 +26,7 @@ class Document(BaseModel):
     resource_id = Column(Integer, index=True)
 
     # Content metadata
-    metadata = Column(JSONB, nullable=False, default=dict)
+    doc_metadata = Column(JSONB, nullable=False, default=dict)
 
     # Full-text search vector
     search_vector = Column(TSVECTOR)
@@ -62,7 +62,7 @@ class DocumentChunk(BaseModel):
     token_count = Column(Integer, nullable=False)
 
     # Chunk metadata
-    metadata = Column(JSONB, nullable=False, default=dict)
+    chunk_metadata = Column(JSONB, nullable=False, default=dict)
 
     def __repr__(self) -> str:
         return f"<DocumentChunk(document_id={self.document_id}, index={self.chunk_index})>"

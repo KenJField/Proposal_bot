@@ -547,18 +547,17 @@ Return JSON with revision plan including specific changes and implementation app
         email_agent = agent_registry.get_agent("email")
 
         await email_agent.execute(AgentContext(
-            await email_agent.execute(AgentContext(
-                project_id=project_id,
-                db_session=context.db_session,
-                data={
-                    "action": "deliver_proposal",
-                    "proposal": {
-                        "file_path": file_path,
-                        "project_title": f"Project {project_id}",
-                        "client_email": "client@example.com"  # Would be retrieved from project
-                    }
+            project_id=project_id,
+            db_session=context.db_session,
+            data={
+                "action": "deliver_proposal",
+                "proposal": {
+                    "file_path": file_path,
+                    "project_title": f"Project {project_id}",
+                    "client_email": "client@example.com"  # Would be retrieved from project
                 }
-            ))
+            }
+        ))
 
     async def _upload_to_notion(self, project_id: int, file_path: str, context: AgentContext) -> None:
         """Upload presentation to Notion."""

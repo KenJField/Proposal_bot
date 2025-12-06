@@ -99,7 +99,7 @@ class StateTransitionLog(BaseModel):
     # Context
     agent_name = Column(String(100))
     reasoning = Column(Text)
-    metadata = Column(JSONB, nullable=False, default=dict)
+    transition_metadata = Column(JSONB, nullable=False, default=dict)
 
     # User actions vs automatic
     is_user_action = Column(JSONB, nullable=False, default=False)

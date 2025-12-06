@@ -107,7 +107,7 @@ class KnowledgeBase:
                 "title": document.title,
                 "content": document.content[:500] + "..." if len(document.content) > 500 else document.content,
                 "document_type": document.document_type,
-                "metadata": document.metadata,
+                "metadata": document.doc_metadata,
                 "similarity_score": float(similarity_score)
             })
 
