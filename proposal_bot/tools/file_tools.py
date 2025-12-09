@@ -95,18 +95,34 @@ def create_file_tools(workspace_dir: str = ".agent_workspace") -> list[Any]:
             return f"Error writing file: {str(e)}"
 
     @tool
-    def edit_file(file_path: str, old_text: str, new_text: str) -> str:
+    def edit_file(edit_data: str) -> str:
         """
         Edit a file by replacing old_text with new_text.
 
         Args:
-            file_path: Path to the file (relative to workspace)
-            old_text: Text to find and replace
-            new_text: Replacement text
+            edit_data: JSON string containing:
+                - file_path: Path to the file (relative to workspace)
+                - old_text: Text to find and replace
+                - new_text: Replacement text
 
         Returns:
             Confirmation message
         """
+        # Parse the JSON string input
+        try:
+            if isinstance(edit_data, str):
+                edit_data = edit_data.strip()
+                edit_data = json.loads(edit_data)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input: {str(e)} - Input: {edit_data[:200]}..."
+
+        file_path = edit_data.get("file_path")
+        old_text = edit_data.get("old_text")
+        new_text = edit_data.get("new_text")
+
+        if not file_path or old_text is None or new_text is None:
+            return "Error: file_path, old_text, and new_text are required"
+
         full_path = workspace_path / file_path
 
         if not full_path.exists():

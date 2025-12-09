@@ -21,22 +21,31 @@ def create_resource_tools() -> list[Any]:
     sheets_service = GoogleSheetsService()
 
     @tool
-    def search_staff_by_skills(
-        skills: list[str],
-        seniority_level: Optional[str] = None,
-        availability_threshold: float = 0.2,
-    ) -> list[dict[str, Any]]:
+    def search_staff_by_skills(search_criteria: str) -> list[dict[str, Any]]:
         """
         Search for staff members by skills and criteria.
 
         Args:
-            skills: List of required skills
-            seniority_level: Optional seniority filter (junior/mid/senior/principal/director)
-            availability_threshold: Minimum availability required (0-1)
+            search_criteria: JSON string containing:
+                - skills: List of required skills
+                - seniority_level: Optional seniority filter (junior/mid/senior/principal/director)
+                - availability_threshold: Minimum availability required (0-1)
 
         Returns:
             List of matching staff members with their details
         """
+        # Parse the JSON string input
+        try:
+            if isinstance(search_criteria, str):
+                search_criteria = search_criteria.strip()
+                search_criteria = json.loads(search_criteria)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input: {str(e)} - Input: {search_criteria[:200]}..."
+
+        skills = search_criteria.get("skills", [])
+        seniority_level = search_criteria.get("seniority_level")
+        availability_threshold = search_criteria.get("availability_threshold", 0.2)
+
         # Read staff profiles from Google Sheets
         staff_data = sheets_service.read_sheet(
             spreadsheet_id=settings.staff_profiles_sheet_id,
@@ -101,22 +110,31 @@ def create_resource_tools() -> list[Any]:
         return matching_staff
 
     @tool
-    def search_vendors_by_service(
-        services: list[str],
-        geographic_region: Optional[str] = None,
-        min_quality_rating: float = 3.5,
-    ) -> list[dict[str, Any]]:
+    def search_vendors_by_service(search_criteria: str) -> list[dict[str, Any]]:
         """
         Search for vendors by service type and criteria.
 
         Args:
-            services: List of required services
-            geographic_region: Optional geographic region filter
-            min_quality_rating: Minimum quality rating required (1-5)
+            search_criteria: JSON string containing:
+                - services: List of required services
+                - geographic_region: Optional geographic region filter
+                - min_quality_rating: Minimum quality rating required (1-5)
 
         Returns:
             List of matching vendors with their details
         """
+        # Parse the JSON string input
+        try:
+            if isinstance(search_criteria, str):
+                search_criteria = search_criteria.strip()
+                search_criteria = json.loads(search_criteria)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input: {str(e)} - Input: {search_criteria[:200]}..."
+
+        services = search_criteria.get("services", [])
+        geographic_region = search_criteria.get("geographic_region")
+        min_quality_rating = search_criteria.get("min_quality_rating", 3.5)
+
         # Read vendor data from Google Sheets
         vendor_data = sheets_service.read_sheet(
             spreadsheet_id=settings.vendor_relationships_sheet_id,
@@ -178,16 +196,27 @@ def create_resource_tools() -> list[Any]:
         return matching_vendors
 
     @tool
-    def get_staff_member(staff_id: str) -> Optional[dict[str, Any]]:
+    def get_staff_member(request_data: str) -> Optional[dict[str, Any]]:
         """
         Get detailed information about a specific staff member.
 
         Args:
-            staff_id: Staff member ID
+            request_data: JSON string containing:
+                - staff_id: Staff member ID
 
         Returns:
             Staff member details or None if not found
         """
+        # Parse the JSON string input
+        try:
+            if isinstance(request_data, str):
+                request_data = request_data.strip()
+                request_data = json.loads(request_data)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input: {str(e)} - Input: {request_data[:200]}..."
+
+        staff_id = request_data.get("staff_id")
+
         staff_data = sheets_service.read_sheet(
             spreadsheet_id=settings.staff_profiles_sheet_id,
             range_name="Staff!A2:Z1000",
@@ -217,16 +246,27 @@ def create_resource_tools() -> list[Any]:
         return None
 
     @tool
-    def get_vendor(vendor_id: str) -> Optional[dict[str, Any]]:
+    def get_vendor(request_data: str) -> Optional[dict[str, Any]]:
         """
         Get detailed information about a specific vendor.
 
         Args:
-            vendor_id: Vendor ID
+            request_data: JSON string containing:
+                - vendor_id: Vendor ID
 
         Returns:
             Vendor details or None if not found
         """
+        # Parse the JSON string input
+        try:
+            if isinstance(request_data, str):
+                request_data = request_data.strip()
+                request_data = json.loads(request_data)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON input: {str(e)} - Input: {request_data[:200]}..."
+
+        vendor_id = request_data.get("vendor_id")
+
         vendor_data = sheets_service.read_sheet(
             spreadsheet_id=settings.vendor_relationships_sheet_id,
             range_name="Vendors!A2:Z1000",
@@ -255,7 +295,7 @@ def create_resource_tools() -> list[Any]:
         return None
 
     @tool
-    def get_pricing_by_service(service_type: str) -> Optional[dict[str, Any]]:
+    def get_pricing_by_service(request_data: str) -> Optional[dict[str, Any]]:
         """
         Get standard pricing information for a service type.
 

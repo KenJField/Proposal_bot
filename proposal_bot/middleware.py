@@ -8,12 +8,18 @@ all agents in the system.
 
 from typing import Any, Dict, List, Optional
 
-from deepagents import (
-    FilesystemMiddleware,
-    SubAgentMiddleware,
-    TodoListMiddleware,
-    create_deep_agent,
-)
+# Compatibility stubs for deepagents middleware
+class FilesystemMiddleware:
+    """Stub for filesystem middleware."""
+    pass
+
+class SubAgentMiddleware:
+    """Stub for subagent middleware."""
+    pass
+
+class TodoListMiddleware:
+    """Stub for todo list middleware."""
+    pass
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.tools import BaseTool

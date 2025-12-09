@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from deepagents import create_deep_agent
+from proposal_bot import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
@@ -82,8 +82,17 @@ class ProposalAgent:
         # Resource tools (Google Sheets)
         tools.extend(create_resource_tools())
 
-        # Email tools
-        tools.extend(create_gmail_tools(agent_id=f"proposal_{self.project_id}"))
+        # Email tools - skip for placeholder testing
+        from proposal_bot.auth import gmail_token_manager
+        credentials = gmail_token_manager.get_gmail_credentials(f"proposal_{self.project_id}")
+        is_placeholder = credentials and all(
+            str(credentials.get(field, '')) == "placeholder"
+            for field in ['client_id', 'client_secret', 'access_token', 'refresh_token']
+        )
+
+        if not is_placeholder:
+            # Only add real Gmail tools if we have real credentials
+            tools.extend(create_gmail_tools(agent_id=f"proposal_{self.project_id}"))
 
         # Knowledge tools
         tools.extend(create_knowledge_tools(self.workspace_dir))
@@ -161,7 +170,7 @@ PROJECT DETAILS:
 - Title: {brief.title}
 - Description: {brief.description}
 - Objectives: {', '.join(brief.objectives)}
-- Budget Range: ${brief.budget_range[0]:,.0f} - ${brief.budget_range[1]:,.0f if brief.budget_range else 'TBD'}
+- Budget Range: {f"${brief.budget_range[0]:,.0f} - ${brief.budget_range[1]:,.0f}" if brief.budget_range else 'TBD'}
 - Timeline: {brief.timeline}
 - Target Audience: {brief.target_audience}
 - Preferred Methodologies: {', '.join(brief.methodology_preferences)}
@@ -181,9 +190,9 @@ Your tasks:
 Use your planning tools to organize this work systematically.
         """.strip()
 
-        # Execute the agent with messages format expected by deep agents
+        # Execute the agent with input format expected by AgentExecutor
         result = self.agent.invoke({
-            "messages": [{"role": "user", "content": brief_summary}]
+            "input": brief_summary
         })
 
         return {

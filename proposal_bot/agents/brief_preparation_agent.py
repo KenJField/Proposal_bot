@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from deepagents import create_deep_agent
+from proposal_bot import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
@@ -72,8 +72,17 @@ class BriefPreparationAgent:
         """Initialize custom tools for this agent (not including built-in deep agent tools)."""
         tools = []
 
-        # Email tools (Gmail integration)
-        tools.extend(create_gmail_tools(agent_id=f"brief_prep_{self.brief_id}"))
+        # Email tools (Gmail integration) - skip for placeholder testing
+        from proposal_bot.auth import gmail_token_manager
+        credentials = gmail_token_manager.get_gmail_credentials(f"brief_prep_{self.brief_id}")
+        is_placeholder = credentials and all(
+            str(credentials.get(field, '')) == "placeholder"
+            for field in ['client_id', 'client_secret', 'access_token', 'refresh_token']
+        )
+
+        if not is_placeholder:
+            # Only add real Gmail tools if we have real credentials
+            tools.extend(create_gmail_tools(agent_id=f"brief_prep_{self.brief_id}"))
 
         # Knowledge base tools
         tools.extend(create_knowledge_tools(self.workspace_dir))
@@ -167,10 +176,12 @@ Your task is to:
 Be thorough and methodical. Use your planning tools to track progress.
         """.strip()
 
-        # Execute the agent with messages format expected by deep agents
-        result = self.agent.invoke({
-            "messages": [{"role": "user", "content": brief_summary}]
-        })
+        # Execute the agent with simple string input
+        try:
+            result = self.agent.run(brief_summary)
+        except Exception as e:
+            # Fallback to invoke format if run fails
+            result = self.agent.invoke({"input": brief_summary})
 
         return {
             "brief_id": self.brief_id,

@@ -37,6 +37,26 @@ def create_gmail_tools(agent_id: str = "default_agent") -> list[Any]:
         )
         raise ValueError(f"Gmail access denied for agent {agent_id}")
 
+    # Check if we're using placeholder credentials for testing
+    credentials = gmail_token_manager.get_gmail_credentials(agent_id)
+    # Only check the essential credential fields we set as placeholders
+    essential_fields = ['client_id', 'client_secret', 'access_token', 'refresh_token']
+    is_placeholder = credentials and all(
+        str(credentials.get(field, '')) == "placeholder"
+        for field in essential_fields
+    )
+
+    if is_placeholder:
+        # Return mock tools for testing with placeholder credentials
+        audit_logger.log_agent_action(
+            agent_type="email_tools",
+            action="gmail_tools_mock_initialized",
+            agent_id=agent_id,
+            details={"mode": "placeholder_testing", "tool_count": 5},
+            success=True
+        )
+        return create_mock_gmail_tools(agent_id)
+
     # Initialize the Gmail toolkit with secure authentication
     try:
         toolkit = GmailToolkit()
@@ -67,6 +87,53 @@ def create_gmail_tools(agent_id: str = "default_agent") -> list[Any]:
             success=False
         )
         raise
+
+
+def create_mock_gmail_tools(agent_id: str) -> list[Any]:
+    """
+    Create mock Gmail tools for testing with placeholder credentials.
+
+    Args:
+        agent_id: Agent identifier for audit logging
+
+    Returns:
+        List of mock Gmail tools
+    """
+    return [
+        MockGmailTool("GmailCreateDraft", agent_id),
+        MockGmailTool("GmailSendMessage", agent_id),
+        MockGmailTool("GmailSearch", agent_id),
+        MockGmailTool("GmailGetMessage", agent_id),
+        MockGmailTool("GmailGetThread", agent_id),
+    ]
+
+
+class MockGmailTool:
+    """
+    Mock Gmail tool for testing with placeholder credentials.
+
+    This tool simulates Gmail operations without actually connecting to Gmail.
+    """
+
+    def __init__(self, name: str, agent_id: str):
+        self.name = name
+        self.agent_id = agent_id
+        self.description = f"Mock {name} tool for testing"
+        self.args_schema = None
+        # Required attributes for LangChain tool compatibility
+        self.is_single_input = True
+        self.handle_tool_error = False
+        self.return_direct = False
+        # Additional attributes needed by structured chat agent
+        self.args = ""  # Empty string for mock args
+
+    def run(self, **kwargs) -> str:
+        """Run the mock tool."""
+        return f"[MOCK] {self.name} executed successfully with args: {kwargs}"
+
+    async def arun(self, **kwargs) -> str:
+        """Async version of run."""
+        return await self.run(**kwargs)
 
 
 class GmailAuditWrapper:

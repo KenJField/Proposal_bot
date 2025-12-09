@@ -22,6 +22,14 @@ class GoogleSheetsService:
         if self._service is not None:
             return self._service
 
+        # Check for placeholder credentials
+        if (
+            self.settings.google_client_id == "placeholder"
+            or self.settings.google_refresh_token == "placeholder"
+        ):
+            print("⚠️ Using Mock Google Sheets Service (placeholder credentials)")
+            return MockSheetsService()
+
         # Create credentials from settings
         creds = Credentials(
             token=None,
@@ -38,6 +46,7 @@ class GoogleSheetsService:
         # Build the service
         self._service = build("sheets", "v4", credentials=creds)
         return self._service
+
 
     def read_sheet(
         self,
@@ -101,6 +110,36 @@ class GoogleSheetsService:
 
         return result
 
+
+class MockSheetsService:
+    """Mock Google Sheets service for testing."""
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    def get(self, **kwargs):
+        return self
+
+    def update(self, **kwargs):
+        return self
+
+    def append(self, **kwargs):
+        return self
+
+    def execute(self):
+        # Return mock data based on context (simplified)
+        # For read_sheet (get)
+        return {
+            "values": [
+                ["Header1", "Header2", "Header3"],
+                ["Row1Col1", "Row1Col2", "Row1Col3"],
+                ["Row2Col1", "Row2Col2", "Row2Col3"],
+            ]
+        }
+
     def append_sheet(
         self,
         spreadsheet_id: str,
@@ -135,3 +174,33 @@ class GoogleSheetsService:
         )
 
         return result
+
+
+class MockSheetsService:
+    """Mock Google Sheets service for testing."""
+
+    def spreadsheets(self):
+        return self
+
+    def values(self):
+        return self
+
+    def get(self, **kwargs):
+        return self
+
+    def update(self, **kwargs):
+        return self
+
+    def append(self, **kwargs):
+        return self
+
+    def execute(self):
+        # Return mock data based on context (simplified)
+        # For read_sheet (get)
+        return {
+            "values": [
+                ["Header1", "Header2", "Header3"],
+                ["Row1Col1", "Row1Col2", "Row1Col3"],
+                ["Row2Col1", "Row2Col2", "Row2Col3"],
+            ]
+        }

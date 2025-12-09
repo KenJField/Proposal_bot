@@ -1,7 +1,7 @@
 """Resource-related schemas."""
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +31,7 @@ class Resource(BaseModel):
 class StaffMember(Resource):
     """Staff member resource."""
 
-    type: ResourceType = Field(default=ResourceType.STAFF, const=True)
+    type: Literal[ResourceType.STAFF] = ResourceType.STAFF
 
     # Professional details
     title: str = Field(..., description="Job title")
@@ -102,7 +102,7 @@ class StaffMember(Resource):
 class Vendor(Resource):
     """External vendor/supplier resource."""
 
-    type: ResourceType = Field(default=ResourceType.VENDOR, const=True)
+    type: Literal[ResourceType.VENDOR] = ResourceType.VENDOR
 
     # Vendor details
     company_name: str = Field(..., description="Vendor company name")

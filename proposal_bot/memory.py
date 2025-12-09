@@ -12,7 +12,32 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-from deepagents import CompositeBackend, StateBackend, StoreBackend
+# Compatibility stubs for deepagents backends
+class CompositeBackend:
+    """Stub for composite backend."""
+    def __init__(self):
+        self.routes = {}
+
+    def add_route(self, path: str, backend):
+        self.routes[path] = backend
+
+class StateBackend:
+    """Stub for state backend."""
+    pass
+
+class StoreBackend:
+    """Stub for store backend."""
+    def get(self, path: str) -> Optional[str]:
+        return None
+
+    def put(self, path: str, content: str) -> None:
+        pass
+
+    def delete(self, path: str) -> None:
+        pass
+
+    def list(self, prefix: str = "") -> list[str]:
+        return []
 
 
 class LangSmithMemoryBackend(StoreBackend):

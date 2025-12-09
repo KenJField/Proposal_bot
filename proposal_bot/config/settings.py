@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     )
 
     # Anthropic Configuration
-    anthropic_api_key: str = Field(..., description="Anthropic API key for Claude models")
+    anthropic_api_key: str = Field(
+        default="placeholder_key", description="Anthropic API key for Claude models"
+    )
 
     # LangSmith Configuration
     langchain_tracing_v2: bool = Field(
@@ -32,28 +34,46 @@ class Settings(BaseSettings):
     )
 
     # Google Workspace Configuration
-    google_client_id: str = Field(..., description="Google OAuth client ID")
-    google_client_secret: str = Field(..., description="Google OAuth client secret")
-    google_refresh_token: str = Field(..., description="Google OAuth refresh token")
+    google_client_id: str = Field(
+        default="placeholder", description="Google OAuth client ID"
+    )
+    google_client_secret: str = Field(
+        default="placeholder", description="Google OAuth client secret"
+    )
+    google_refresh_token: str = Field(
+        default="placeholder", description="Google OAuth refresh token"
+    )
 
     # Google Sheets IDs
-    staff_profiles_sheet_id: str = Field(..., description="Google Sheet ID for staff profiles")
-    pricing_sheet_id: str = Field(..., description="Google Sheet ID for pricing data")
+    staff_profiles_sheet_id: str = Field(
+        default="placeholder", description="Google Sheet ID for staff profiles"
+    )
+    pricing_sheet_id: str = Field(
+        default="placeholder", description="Google Sheet ID for pricing data"
+    )
     vendor_relationships_sheet_id: str = Field(
-        ..., description="Google Sheet ID for vendor relationships"
+        default="placeholder", description="Google Sheet ID for vendor relationships"
     )
     capabilities_sheet_id: str = Field(
-        ..., description="Google Sheet ID for company capabilities"
+        default="placeholder", description="Google Sheet ID for company capabilities"
     )
 
     # Gmail Configuration
     gmail_user_email: str = Field(
-        ..., description="Gmail address for sending/receiving emails"
+        default="test@example.com", description="Gmail address for sending/receiving emails"
     )
-    gmail_client_id: str = Field(..., description="Gmail OAuth client ID")
-    gmail_client_secret: str = Field(..., description="Gmail OAuth client secret")
-    gmail_access_token: str = Field(..., description="Gmail OAuth access token")
-    gmail_refresh_token: str = Field(..., description="Gmail OAuth refresh token")
+    gmail_client_id: str = Field(
+        default="placeholder", description="Gmail OAuth client ID"
+    )
+    gmail_client_secret: str = Field(
+        default="placeholder", description="Gmail OAuth client secret"
+    )
+    gmail_access_token: str = Field(
+        default="placeholder", description="Gmail OAuth access token"
+    )
+    gmail_refresh_token: str = Field(
+        default="placeholder", description="Gmail OAuth refresh token"
+    )
 
     # Database Configuration
     database_url: str = Field(
@@ -79,13 +99,13 @@ class Settings(BaseSettings):
 
     # Authentication Configuration
     jwt_secret_key: Optional[str] = Field(
-        default=None, description="JWT secret key for token signing"
+        default="your-secret-key-here-make-it-long-and-random", description="JWT secret key for token signing"
     )
     admin_username: str = Field(
         default="admin", description="Admin username for agent server access"
     )
     admin_password_hash: str = Field(
-        ..., description="Hashed admin password for agent server access"
+        default="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYfY8XzYzK", description="Hashed admin password for agent server access"
     )
 
     # Audit Logging Configuration
@@ -104,10 +124,10 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     default_model: str = Field(
-        default="claude-3-5-sonnet-20241022", description="Default Anthropic model"
+        default="claude-3-haiku-20240307", description="Default Anthropic model"
     )
     fast_model: str = Field(
-        default="claude-3-5-haiku-20241022", description="Fast model for simple tasks"
+        default="claude-3-haiku-20240307", description="Fast model for simple tasks"
     )
     temperature: float = Field(default=0.7, description="LLM temperature for generation")
     max_tokens: int = Field(default=4096, description="Maximum tokens for LLM responses")

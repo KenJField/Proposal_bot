@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from deepagents import create_deep_agent
+from proposal_bot import create_deep_agent
 from langchain_anthropic import ChatAnthropic
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -68,8 +68,17 @@ class BackgroundMemoryAgent:
         """Initialize custom tools for this agent."""
         tools = []
 
-        # Email tools for monitoring
-        tools.extend(create_gmail_tools(agent_id="background_memory"))
+        # Email tools for monitoring - skip for placeholder testing
+        from proposal_bot.auth import gmail_token_manager
+        credentials = gmail_token_manager.get_gmail_credentials("background_memory")
+        is_placeholder = credentials and all(
+            str(credentials.get(field, '')) == "placeholder"
+            for field in ['client_id', 'client_secret', 'access_token', 'refresh_token']
+        )
+
+        if not is_placeholder:
+            # Only add real Gmail tools if we have real credentials
+            tools.extend(create_gmail_tools(agent_id="background_memory"))
 
         # Knowledge tools for memory updates
         tools.extend(create_knowledge_tools(self.workspace_dir))
@@ -152,9 +161,9 @@ Extract and store:
 Update the appropriate knowledge categories.
         """.strip()
 
-        # Execute the agent with messages format expected by deep agents
+        # Execute the agent with input format expected by AgentExecutor
         result = self.agent.invoke({
-            "messages": [{"role": "user", "content": email_summary}]
+            "input": email_summary
         })
 
         return {
@@ -186,7 +195,7 @@ Provide a summary of all updates made.
 
         # Execute the agent
         result = self.agent.invoke({
-            "messages": [{"role": "user", "content": monitoring_task}]
+            "input": monitoring_task
         })
 
         return {
@@ -216,7 +225,7 @@ Provide actionable insights for improving future proposals.
 
         # Execute the agent
         result = self.agent.invoke({
-            "messages": [{"role": "user", "content": analysis_task}]
+            "input": analysis_task
         })
 
         return {

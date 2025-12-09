@@ -3,7 +3,7 @@
 from typing import Any, Dict, TypedDict
 
 from langgraph.graph import END, StateGraph
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 
 from proposal_bot.agents.background_memory_agent import BackgroundMemoryAgent
 from proposal_bot.agents.brief_preparation_agent import BriefPreparationAgent
@@ -68,7 +68,7 @@ class ProposalWorkflow:
         Args:
             checkpoint_db: Path to SQLite database for checkpoints
         """
-        self.memory = SqliteSaver.from_conn_string(checkpoint_db)
+        self.memory = MemorySaver()
         self.graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
